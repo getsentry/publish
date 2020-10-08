@@ -1,0 +1,47 @@
+name: release
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: Repository to release
+        required: true
+      version:
+        description: Version to release
+        required: true
+      dry_run:
+        description: Do not actually cut the release
+        required: false
+        default: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    name: "Release a new version"
+    steps:
+      - id: killswitch
+        if: ${{ !github.event.inputs.force }}
+        run: |
+          if curl -s "https://api.github.com/repos/$GITHUB_REPOSITORY/issues?state=open&labels=release-blocker" | grep -Pzvo '\[[\s\n\r]*\]'; then
+            echo "Open release-blocking issues found, cancelling release...";
+            curl -sf -X POST -H 'Accept: application/vnd.github.v3+json' -H 'Authorization: token ${{ secrets.GITHUB_TOKEN }}' https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/${{ github.run_id }}/cancel;
+          fi
+      - id: calver
+        if: ${{ !github.event.inputs.version }}
+        run: echo "::set-output name=version::$(date +'%y.%-m.0')"
+      - uses: actions/checkout@v2
+        with:
+          repository: ${{ github.event.inputs.repo }}
+          token: ${{ secrets.GH_SENTRY_BOT_PAT }}
+      - uses: getsentry/craft@master
+        with:
+          action: publish
+          version: ${{ github.event.inputs.version || steps.calver.outputs.version }}
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          GITHUB_API_TOKEN: ${{ secrets.GH_SENTRY_BOT_PAT }}
+          GIT_COMMITTER_NAME: getsentry-bot
+          GIT_AUTHOR_NAME: getsentry-bot
+          EMAIL: bot@getsentry.com
+          ZEUS_API_TOKEN: ${{ secrets.ZEUS_API_TOKEN }}
+          CRAFT_GCS_TARGET_CREDS_JSON: ${{ secrets.CRAFT_GCS_TARGET_CREDS_JSON }}
+          DOCKER_USERNAME: "sentrybuilder"
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}

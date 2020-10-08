@@ -11,7 +11,7 @@ on:
       dry_run:
         description: Do not actually cut the release
         required: false
-        default: false
+        default: "false"
 jobs:
   release:
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-name: release
+name: publish
 on:
   workflow_dispatch:
     inputs:
@@ -15,18 +15,8 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    name: "Release a new version"
+    name: "Publish a new version"
     steps:
-      - id: killswitch
-        if: ${{ !github.event.inputs.force }}
-        run: |
-          if curl -s "https://api.github.com/repos/$GITHUB_REPOSITORY/issues?state=open&labels=release-blocker" | grep -Pzvo '\[[\s\n\r]*\]'; then
-            echo "Open release-blocking issues found, cancelling release...";
-            curl -sf -X POST -H 'Accept: application/vnd.github.v3+json' -H 'Authorization: token ${{ secrets.GITHUB_TOKEN }}' https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/${{ github.run_id }}/cancel;
-          fi
-      - id: calver
-        if: ${{ !github.event.inputs.version }}
-        run: echo "::set-output name=version::$(date +'%y.%-m.0')"
       - uses: actions/checkout@v2
         with:
           repository: ${{ github.event.inputs.repo }}
@@ -34,14 +24,19 @@ jobs:
       - uses: getsentry/craft@master
         with:
           action: publish
-          version: ${{ github.event.inputs.version || steps.calver.outputs.version }}
+          version: ${{ github.event.inputs.version }}
         env:
           DRY_RUN: ${{ github.event.inputs.dry_run }}
-          GITHUB_API_TOKEN: ${{ secrets.GH_SENTRY_BOT_PAT }}
           GIT_COMMITTER_NAME: getsentry-bot
           GIT_AUTHOR_NAME: getsentry-bot
           EMAIL: bot@getsentry.com
+          GITHUB_API_TOKEN: ${{ secrets.GH_SENTRY_BOT_PAT }}
+          # TODO(byk): Drop ZEUS_API_TOKEN when all repos use GitHub Artifacts
           ZEUS_API_TOKEN: ${{ secrets.ZEUS_API_TOKEN }}
           CRAFT_GCS_TARGET_CREDS_JSON: ${{ secrets.CRAFT_GCS_TARGET_CREDS_JSON }}
           DOCKER_USERNAME: "sentrybuilder"
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          TWINE_USERNAME: '__token__'
+          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # TODO(byk): Add other credentials like Cargo etc as needed

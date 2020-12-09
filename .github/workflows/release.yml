@@ -34,7 +34,7 @@ jobs:
             const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
             const inputs = context.payload.issue.title.match(titleParser).groups();
 
-            return {dry_run: "", ..inputs};
+            return {dry_run: "", ...inputs};
       - uses: actions/checkout@v2
         with:
           repository: ${{ fromJSON(steps.inputs).repo }}

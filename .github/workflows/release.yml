@@ -27,14 +27,20 @@ jobs:
             if (context.eventName === 'workflow_dispatch') {
               return context.inputs;
             }
+            else {
+              console.log(context.eventName);
+            }
+
             const {owner, repo} = context.repo;
+            let dry_run = "";
             if (context.payload.label !== 'accepted') {
-              return await github.actions.cancelWorkflowRun(owner, repo, context.runId);
+              dry_run = "1"; // set this just in case we cannot stop the workflow in time
+              await github.actions.cancelWorkflowRun(owner, repo, context.runId);
             }
             const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
             const inputs = context.payload.issue.title.match(titleParser).groups();
 
-            return {dry_run: "", ...inputs};
+            return {dry_run, ...inputs};
       - uses: actions/checkout@v2
         with:
           repository: getsentry/${{ fromJSON(steps.inputs).repo }}

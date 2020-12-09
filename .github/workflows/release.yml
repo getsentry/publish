@@ -37,7 +37,7 @@ jobs:
             return {dry_run: "", ...inputs};
       - uses: actions/checkout@v2
         with:
-          repository: ${{ fromJSON(steps.inputs).repo }}
+          repository: getsentry/${{ fromJSON(steps.inputs).repo }}
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
       - uses: getsentry/craft@master
         with:

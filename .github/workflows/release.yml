@@ -11,22 +11,40 @@ on:
       dry_run:
         description: Do not actually cut the release
         required: false
-        default: "false"
+        default: ''
+  issues:
+    types: [labeled]
 jobs:
   release:
     runs-on: ubuntu-latest
-    name: "Publish a new version"
+    name: 'Publish a new version'
     steps:
+      - name: 'Set inputs'
+        id: inputs
+        uses: actions/github-script@v3
+        with:
+          script: |
+            if (context.eventName === 'workflow_dispatch') {
+              return context.inputs;
+            }
+            const {owner, repo} = context.repo;
+            if (context.payload.label !== 'accepted') {
+              return await github.actions.cancelWorkflowRun(owner, repo, context.runId);
+            }
+            const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
+            const inputs = context.payload.issue.title.match(titleParser).groups();
+
+            return {dry_run: "", ..inputs};
       - uses: actions/checkout@v2
         with:
-          repository: ${{ github.event.inputs.repo }}
+          repository: ${{ fromJSON(steps.inputs).repo }}
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
       - uses: getsentry/craft@master
         with:
           action: publish
-          version: ${{ github.event.inputs.version }}
+          version: ${{ fromJSON(steps.inputs).version }}
         env:
-          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          DRY_RUN: ${{ fromJSON(steps.inputs).dry_run }}
           GIT_COMMITTER_NAME: getsentry-bot
           GIT_AUTHOR_NAME: getsentry-bot
           EMAIL: bot@getsentry.com
@@ -34,7 +52,7 @@ jobs:
           # TODO(byk): Drop ZEUS_API_TOKEN when all repos use GitHub Artifacts
           ZEUS_API_TOKEN: ${{ secrets.ZEUS_API_TOKEN }}
           CRAFT_GCS_TARGET_CREDS_JSON: ${{ secrets.CRAFT_GCS_TARGET_CREDS_JSON }}
-          DOCKER_USERNAME: "sentrybuilder"
+          DOCKER_USERNAME: 'sentrybuilder'
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           TWINE_USERNAME: '__token__'
           TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}

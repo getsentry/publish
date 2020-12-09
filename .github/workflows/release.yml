@@ -27,9 +27,6 @@ jobs:
             if (context.eventName === 'workflow_dispatch') {
               return context.inputs;
             }
-            else {
-              console.log(context.eventName);
-            }
 
             const {owner, repo} = context.repo;
             let dry_run = "";
@@ -43,14 +40,14 @@ jobs:
             return {dry_run, ...inputs};
       - uses: actions/checkout@v2
         with:
-          repository: getsentry/${{ fromJSON(steps.inputs).repo }}
+          repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
       - uses: getsentry/craft@master
         with:
           action: publish
-          version: ${{ fromJSON(steps.inputs).version }}
+          version: ${{ fromJSON(steps.inputs.outputs.result).version }}
         env:
-          DRY_RUN: ${{ fromJSON(steps.inputs).dry_run }}
+          DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}
           GIT_COMMITTER_NAME: getsentry-bot
           GIT_AUTHOR_NAME: getsentry-bot
           EMAIL: bot@getsentry.com

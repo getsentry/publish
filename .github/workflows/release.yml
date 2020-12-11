@@ -29,8 +29,9 @@ jobs:
             }
 
             const {owner, repo} = context.repo;
+            console.log(owner, repo);
             let dry_run = "";
-            if (context.payload.label !== 'accepted') {
+            if (context.payload.label.name !== 'accepted') {
               dry_run = "1"; // set this just in case we cannot stop the workflow in time
               await github.actions.cancelWorkflowRun(owner, repo, context.runId);
             }

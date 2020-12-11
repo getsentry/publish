@@ -29,11 +29,11 @@ jobs:
             }
 
             const {owner, repo} = context.repo;
-            console.log(owner, repo);
+            console.log(context.payload);
             let dry_run = "";
             if (context.payload.label.name !== 'accepted') {
               dry_run = "1"; // set this just in case we cannot stop the workflow in time
-              await github.actions.cancelWorkflowRun(owner, repo, context.runId);
+              await github.actions.cancelWorkflowRun({owner, repo, run_id: context.runId});
             }
             const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
             const inputs = context.payload.issue.title.match(titleParser).groups();

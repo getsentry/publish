@@ -44,11 +44,10 @@ jobs:
         with:
           script: |
             const repoInfo = context.repo;
-            const workflowInfo = await github.actions.getWorkflowRun({
+            const workflowInfo = (await github.actions.getWorkflowRun({
               ...repoInfo,
               run_id: context.runId,
-            });
-            console.log(workflowInfo);
+            })).data;
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
@@ -83,10 +82,10 @@ jobs:
         with:
           script: |
             const repoInfo = context.repo;
-            const workflowInfo = await github.actions.getWorkflowRun({
+            const workflowInfo = (await github.actions.getWorkflowRun({
               ...repoInfo,
               run_id: context.runId,
-            });
+            })).data;
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
@@ -98,10 +97,10 @@ jobs:
         with:
           script: |
             const repoInfo = context.repo;
-            const workflowInfo = await github.actions.getWorkflowRun({
+            const workflowInfo = (await github.actions.getWorkflowRun({
               ...repoInfo,
               run_id: context.runId,
-            });
+            })).data;
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,

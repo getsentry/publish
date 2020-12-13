@@ -1,0 +1,31 @@
+name: calver
+on:
+  issues:
+    types: [opened]
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    name: 'Auto approve CalVer releases'
+    steps:
+      - uses: actions/github-script@v3
+        with:
+          # Do not use the built-in GITHUB_TOKEN so the adding of the accepted label
+          # runs the associated deploy flow.
+          github-token: ${{ secrets.GH_SENTRY_BOT_PAT }}
+          script: |
+            const allowedRepos = new Set(['sentry', 'snuba', 'relay', 'onpremise']);
+            const today = new Date();
+            const allowedVersionPrefix = `${today.getFullYear().toString().slice(2)}.${today.getMonth()+1}.`;
+            const {owner, repo} = context.repo;
+            const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
+
+            const inputs = context.payload.issue.title.match(titleParser).groups;
+            // The version checking is to prevent random releases from happenning, esepecially for Relay
+            if (allowedRepos.has(inputs.repo) && inputs.version.startsWith(allowedVersionPrefix)) {
+                await github.issues.addLabels({
+                    owner,
+                    repo,
+                    issue_number: context.payload.issue.number,
+                    labels: ['accepted'],
+                });
+            }

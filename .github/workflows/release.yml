@@ -38,6 +38,21 @@ jobs:
             const inputs = context.payload.issue.title.match(titleParser).groups;
 
             return {dry_run, ...inputs};
+      - name: 'Inform the issue'
+        id: inform-start
+        uses: actions/github-script@v3
+        with:
+          script: |
+            const repoInfo = context.repo;
+            const workflowInfo = await github.actions.getWorkflowRun({
+              ...repoInfo,
+              run_id: context.runId,
+            });
+            await github.issues.createComment({
+              ...repoInfo,
+              issue_number: context.payload.issue.number,
+              body: `Deploy started: [run ${context.runId}](${workflowInfo.html_url})`,
+            });
       - uses: actions/checkout@v2
         with:
           repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
@@ -61,3 +76,38 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           # TODO(byk): Add other credentials like Cargo etc as needed
+      - name: Inform failure
+        if: ${{ failure() }}
+        uses: actions/github-script@v3
+        with:
+          script: |
+            const repoInfo = context.repo;
+            const workflowInfo = await github.actions.getWorkflowRun({
+              ...repoInfo,
+              run_id: context.runId,
+            });
+            await github.issues.createComment({
+              ...repoInfo,
+              issue_number: context.payload.issue.number,
+              body: `Deploy failed: [run ${context.runId}](${workflowInfo.html_url})`,
+            });
+      - name: Close on success
+        if: ${{ success() }}
+        uses: actions/github-script@v3
+        with:
+          script: |
+            const repoInfo = context.repo;
+            const workflowInfo = await github.actions.getWorkflowRun({
+              ...repoInfo,
+              run_id: context.runId,
+            });
+            await github.issues.createComment({
+              ...repoInfo,
+              issue_number: context.payload.issue.number,
+              body: `Deployed succesfully: [run ${context.runId}](${workflowInfo.html_url})`,
+            });
+            await github.issues.update({
+              ...repoInfo,
+              issue_number: context.payload.issue.number,
+              state: 'closed'
+            });

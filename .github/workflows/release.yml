@@ -48,6 +48,7 @@ jobs:
               ...repoInfo,
               run_id: context.runId,
             });
+            console.log(workflowInfo);
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,

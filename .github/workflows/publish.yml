@@ -30,14 +30,16 @@ jobs:
 
             const {owner, repo} = context.repo;
             let dry_run = "";
-            if (context.payload.label.name !== 'accepted') {
-              dry_run = "1"; // set this just in case we cannot stop the workflow in time
-              await github.actions.cancelWorkflowRun({owner, repo, run_id: context.runId});
-            }
             const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
-            const inputs = context.payload.issue.title.match(titleParser).groups;
+            const titleMatch = context.payload.issue.title.match(titleParser);
 
-            return {dry_run, ...inputs};
+            // if the label is not accepted or we cannot parse the title message
+            if (context.payload.label.name !== 'accepted' || !titleMatch) {
+              await github.actions.cancelWorkflowRun({owner, repo, run_id: context.runId});
+              return;
+            }
+
+            return {dry_run, ...titleMatch.groups};
       - name: 'Inform the issue'
         id: inform-start
         uses: actions/github-script@v3
@@ -51,7 +53,7 @@ jobs:
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
-              body: `Deploy started: [run ${context.runId}](${workflowInfo.html_url})`,
+              body: `Deploy started: [run#${context.runId}](${workflowInfo.html_url})`,
             });
       - uses: actions/checkout@v2
         with:
@@ -89,7 +91,7 @@ jobs:
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
-              body: `Deploy failed: [run ${context.runId}](${workflowInfo.html_url})`,
+              body: `Deploy failed: [run#${context.runId}](${workflowInfo.html_url})`,
             });
       - name: Close on success
         if: ${{ success() }}
@@ -104,7 +106,7 @@ jobs:
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
-              body: `Deployed succesfully: [run ${context.runId}](${workflowInfo.html_url})`,
+              body: `Deployed succesfully: [run#${context.runId}](${workflowInfo.html_url})`,
             });
             await github.issues.update({
               ...repoInfo,

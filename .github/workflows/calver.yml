@@ -19,7 +19,12 @@ jobs:
             const {owner, repo} = context.repo;
             const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
 
-            const inputs = context.payload.issue.title.match(titleParser).groups;
+            const titleMatch = context.payload.issue.title.match(titleParser);
+            if (!titleMatch) {
+                return;
+            }
+
+            const inputs = titleMatch.groups;
             // The version checking is to prevent random releases from happenning, esepecially for Relay
             if (allowedRepos.has(inputs.repo) && inputs.version.startsWith(allowedVersionPrefix)) {
                 await github.issues.addLabels({

@@ -29,7 +29,6 @@ jobs:
             }
 
             const {owner, repo} = context.repo;
-            let dry_run = "";
             const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
             const titleMatch = context.payload.issue.title.match(titleParser);
 
@@ -39,6 +38,7 @@ jobs:
               return;
             }
 
+            dry_run = context.payload.issue.labels.some(l => l.name === 'dry-run') ? '1' : '';
             return {dry_run, ...titleMatch.groups};
       - name: 'Inform the issue'
         id: inform-start

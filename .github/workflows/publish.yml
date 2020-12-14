@@ -1,47 +1,26 @@
 name: publish
 on:
-  workflow_dispatch:
-    inputs:
-      repo:
-        description: Repository to release
-        required: true
-      version:
-        description: Version to release
-        required: true
-      dry_run:
-        description: Do not actually cut the release
-        required: false
-        default: ''
   issues:
     types: [labeled]
 jobs:
   release:
     runs-on: ubuntu-latest
     name: 'Publish a new version'
+    if: github.event.label.name == 'accepted'
     steps:
       - name: 'Set inputs'
         id: inputs
         uses: actions/github-script@v3
         with:
           script: |
-            if (context.eventName === 'workflow_dispatch') {
-              return context.payload.inputs;
-            }
-
             const {owner, repo} = context.repo;
             const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
-            const titleMatch = context.payload.issue.title.match(titleParser);
-
-            // if the label is not accepted or we cannot parse the title message
-            if (context.payload.label.name !== 'accepted' || !titleMatch) {
-              await github.actions.cancelWorkflowRun({owner, repo, run_id: context.runId});
-              return;
-            }
+            const titleMatch = context.payload.issue.title.match(titleParser).groups;
 
             dry_run = context.payload.issue.labels.some(l => l.name === 'dry-run') ? '1' : '';
-            return {dry_run, ...titleMatch.groups};
+            return {dry_run, ...titleMatch};
       - name: 'Inform the issue'
-        id: inform-start
+        if: steps.inputs.outcome == 'success'
         uses: actions/github-script@v3
         with:
           script: |
@@ -56,6 +35,7 @@ jobs:
               body: `Deploy started: [run#${context.runId}](${workflowInfo.html_url})`,
             });
       - uses: actions/checkout@v2
+        if: ${{ steps.inputs.outputs.result }}
         with:
           repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}

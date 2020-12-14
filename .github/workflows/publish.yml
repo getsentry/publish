@@ -106,7 +106,7 @@ jobs:
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
-              body: `Deployed succesfully: [run#${context.runId}](${workflowInfo.html_url})`,
+              body: `Deployed successfully: [run#${context.runId}](${workflowInfo.html_url})`,
             });
             await github.issues.update({
               ...repoInfo,

@@ -1,3 +1,3 @@
-# release
+# publish
 
-Meta repository to trigger release processes from other repositories.
+Meta repository to trigger publish processes from other repositories.

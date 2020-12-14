@@ -3,7 +3,7 @@ on:
   issues:
     types: [labeled]
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
     name: 'Publish a new version'
     if: github.event.label.name == 'accepted'
@@ -14,7 +14,7 @@ jobs:
         with:
           script: |
             const {owner, repo} = context.repo;
-            const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
+            const titleParser = /^publish: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
             const titleMatch = context.payload.issue.title.match(titleParser).groups;
 
             dry_run = context.payload.issue.labels.some(l => l.name === 'dry-run') ? '1' : '';
@@ -32,7 +32,7 @@ jobs:
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
-              body: `Deploy started: [run#${context.runId}](${workflowInfo.html_url})`,
+              body: `Publishing: [run#${context.runId}](${workflowInfo.html_url})`,
             });
       - uses: actions/checkout@v2
         if: ${{ steps.inputs.outputs.result }}
@@ -71,7 +71,7 @@ jobs:
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
-              body: `Deploy failed: [run#${context.runId}](${workflowInfo.html_url})`,
+              body: `Failed to publish: [run#${context.runId}](${workflowInfo.html_url})`,
             });
       - name: Close on success
         if: ${{ success() }}
@@ -86,7 +86,7 @@ jobs:
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
-              body: `Deployed successfully: [run#${context.runId}](${workflowInfo.html_url})`,
+              body: `Published successfully: [run#${context.runId}](${workflowInfo.html_url})`,
             });
             await github.issues.update({
               ...repoInfo,

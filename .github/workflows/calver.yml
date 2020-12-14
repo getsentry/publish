@@ -3,9 +3,9 @@ on:
   issues:
     types: [opened]
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
-    name: 'Auto approve CalVer releases'
+    name: 'Auto approve publishing CalVer releases'
     if: >-
       contains(github.event.issue.title, 'sentry') ||
       contains(github.event.issue.title, 'snuba') ||
@@ -15,13 +15,13 @@ jobs:
       - uses: actions/github-script@v3
         with:
           # Do not use the built-in GITHUB_TOKEN so the adding of the accepted label
-          # runs the associated deploy flow.
+          # runs the associated publish flow.
           github-token: ${{ secrets.GH_SENTRY_BOT_PAT }}
           script: |
             const today = new Date();
             const allowedVersionPrefix = `${today.getFullYear().toString().slice(2)}.${today.getMonth()+1}.`;
             const {owner, repo} = context.repo;
-            const titleParser = /^deploy: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
+            const titleParser = /^publish: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
 
             const titleMatch = context.payload.issue.title.match(titleParser);
             if (!titleMatch) {

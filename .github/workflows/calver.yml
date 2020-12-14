@@ -6,6 +6,11 @@ jobs:
   release:
     runs-on: ubuntu-latest
     name: 'Auto approve CalVer releases'
+    if: >-
+      contains(github.event.issue.title, 'sentry') or
+      contains(github.event.issue.title, 'snuba') or
+      contains(github.event.issue.title, 'relay') or
+      contains(github.event.issue.title, 'onpremise')
     steps:
       - uses: actions/github-script@v3
         with:
@@ -13,7 +18,6 @@ jobs:
           # runs the associated deploy flow.
           github-token: ${{ secrets.GH_SENTRY_BOT_PAT }}
           script: |
-            const allowedRepos = new Set(['sentry', 'snuba', 'relay', 'onpremise']);
             const today = new Date();
             const allowedVersionPrefix = `${today.getFullYear().toString().slice(2)}.${today.getMonth()+1}.`;
             const {owner, repo} = context.repo;
@@ -25,8 +29,9 @@ jobs:
             }
 
             const inputs = titleMatch.groups;
-            // The version checking is to prevent random releases from happening, especially for Relay.
-            if (allowedRepos.has(inputs.repo) && inputs.version.startsWith(allowedVersionPrefix)) {
+            // The version checking is to prevent random releases from happening, especially for Relay
+            // See why Relay is an exception: https://github.com/getsentry/relay/#release-management
+            if (inputs.version.startsWith(allowedVersionPrefix)) {
                 await github.issues.addLabels({
                     owner,
                     repo,

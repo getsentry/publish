@@ -25,7 +25,7 @@ jobs:
             }
 
             const inputs = titleMatch.groups;
-            // The version checking is to prevent random releases from happenning, esepecially for Relay
+            // The version checking is to prevent random releases from happening, especially for Relay.
             if (allowedRepos.has(inputs.repo) && inputs.version.startsWith(allowedVersionPrefix)) {
                 await github.issues.addLabels({
                     owner,

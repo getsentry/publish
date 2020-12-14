@@ -39,6 +39,7 @@ jobs:
         with:
           repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
+          fetch-depth: 0
       - uses: getsentry/craft@master
         with:
           action: publish

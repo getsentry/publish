@@ -8,7 +8,7 @@ jobs:
     name: "Publish a new version"
     if: github.event.label.name == 'accepted'
     steps:
-      - name: "Set inputs"
+      - name: "Parse and set inputs"
         id: inputs
         uses: actions/github-script@v3
         with:
@@ -19,7 +19,7 @@ jobs:
 
             dry_run = context.payload.issue.labels.some(l => l.name === 'dry-run') ? '1' : '';
             return {dry_run, ...titleMatch};
-      - name: "Inform the issue"
+      - name: "Inform start"
         if: steps.inputs.outcome == 'success'
         uses: actions/github-script@v3
         with:
@@ -35,12 +35,14 @@ jobs:
               body: `Publishing: [run#${context.runId}](${workflowInfo.html_url})`,
             });
       - uses: actions/checkout@v2
+        name: Check out target repo
         if: ${{ steps.inputs.outputs.result }}
         with:
           repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
           fetch-depth: 0
       - uses: getsentry/craft@master
+        name: Publish using Craft
         with:
           action: publish
           version: ${{ fromJSON(steps.inputs.outputs.result).version }}
@@ -61,7 +63,7 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           # TODO(byk): Add other credentials like Cargo etc as needed
-      - name: Inform failure
+      - name: Inform about failure
         if: ${{ failure() }}
         uses: actions/github-script@v3
         with:

@@ -5,7 +5,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    name: 'Auto approve publishing CalVer releases'
+    name: "Auto approve publishing CalVer releases"
     if: >-
       contains(github.event.issue.title, 'sentry') ||
       contains(github.event.issue.title, 'snuba') ||
@@ -21,7 +21,7 @@ jobs:
             const today = new Date();
             const allowedVersionPrefix = `${today.getFullYear().toString().slice(2)}.${today.getMonth()+1}.`;
             const {owner, repo} = context.repo;
-            const titleParser = /^publish: (?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
+            const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^\/@]+)@(?<version>[\w.]+)$/;
 
             const titleMatch = context.payload.issue.title.match(titleParser);
             if (!titleMatch) {

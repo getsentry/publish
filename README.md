@@ -2,6 +2,14 @@
 
 This is a meta/control repository that implements the [Central Publish Repository](https://www.notion.so/beb8598dab6f4f11ba1ca42c211f04f0) RFC
 
+## Goals
+
+ 1. We do not want employees to publish through their own accounts
+ 1. We do not want employees to have access to the global credentials
+ 1. We do not want employees to build and publish releases from their machines
+ 1. We want releases to require formal approvals from a limited set of release managers
+ 1. We want all the above to not discourage from any engineer initiating a release
+
 ## Usage
 
 1. Add [action-prepare-release](https://github.com/getsentry/action-prepare-release/) to your project in a release workflow:

@@ -17,27 +17,27 @@ This is a meta/control repository that implements the [Central Publish Repositor
     name: Release
     on:
     workflow_dispatch:
-        inputs:
-        version:
-            description: Version to release
-            required: true
-        force:
-            description: Force a release even when there are release-blockers (optional)
-            required: false
+      inputs:
+      version:
+        description: Version to release
+        required: true
+      force:
+        description: Force a release even when there are release-blockers (optional)
+        required: false
     jobs:
     release:
-        runs-on: ubuntu-latest
-        name: 'Release a new version'
-        steps:
+      runs-on: ubuntu-latest
+      name: 'Release a new version'
+      steps:
         - uses: actions/checkout@v2
-        with:
+          with:
             token: ${{ secrets.GH_RELEASE_PAT }}
             fetch-depth: 0
         - name: Prepare release
-        uses: getsentry/action-prepare-release@v1
-        env:
+          uses: getsentry/action-prepare-release@v1
+          env:
             GITHUB_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
-        with:
+          with:
             version: ${{ github.event.inputs.version }}
             force: ${{ github.event.inputs.force }}
     ```

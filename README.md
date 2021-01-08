@@ -12,6 +12,7 @@ This is a meta/control repository that implements the [Central Publish Repositor
 
 ## Usage
 
+1. Set up [Craft](https://github.com/getsentry/craft/) for your repo
 1. Add [action-prepare-release](https://github.com/getsentry/action-prepare-release/) to your project in a release workflow:
     ```yaml
     name: Release
@@ -50,7 +51,7 @@ This is a meta/control repository that implements the [Central Publish Repositor
 
 ## CalVer
 
-1. You need to add `calver: true` under the `with` block to enable automatic version determination
+1. You need to add `calver: true` under the `with` block of the `Prepare release` step to enable automatic version determination
 1. You also need to whitelist your repository here in the [`calver workflow`](https://github.com/getsentry/publish/blob/main/.github/workflows/calver.yml#L9-L13)
 
 ## Under the hood

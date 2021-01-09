@@ -10,10 +10,16 @@ This is a meta/control repository that implements the [Central Publish Repositor
  1. We want releases to require formal approvals from a limited set of release managers
  1. We want all the above to not discourage from any engineer initiating a release
 
-## Usage
+## Setup
 
-1. Set up [Craft](https://github.com/getsentry/craft/) for your repo
-1. Add [action-prepare-release](https://github.com/getsentry/action-prepare-release/) to your project in a release workflow:
+1. Set up [Craft](https://github.com/getsentry/craft/) for your repo and use GitHub as status and artifacts provider:
+    ```yaml
+    statusProvider:
+      name: github
+    artifactProvider:
+      name: github
+    ```
+1. Add [action-prepare-release](https://github.com/getsentry/action-prepare-release/) to your project in a release workflow under `.github/workflows/release.yml`:
     ```yaml
     name: Release
     on:
@@ -43,9 +49,12 @@ This is a meta/control repository that implements the [Central Publish Repositor
             force: ${{ github.event.inputs.force }}
     ```
 1. Make sure you don't have branch protections enabled on your repository or the [releases team](https://github.com/orgs/getsentry/teams/releases) is added to your repository as an admin with the "Include administrators" option disabled so we can automatically merge or push to master during the release flows
+
+## Usage
+
 1. Go to your repo and trigger the workflow (example: https://github.com/getsentry/sentry/actions/manual?workflow=.github%2Fworkflows%2Frelease.yml)
 1. Once the workflow finishes, see the publishing request in this repo (example: #40)
-1. Add the [**`accepted`**](https://github.com/getsentry/publish/labels/accepted) label to initiate publishing
+1. Add the [**`accepted`**](https://github.com/getsentry/publish/labels/accepted) label to initiate publishing. Since this action requires elevated permissions, you may need to ask your team lead or manager
 1. Observe the issue for information about the triggered run
 1. The issue will automatically be closed when publishing succeeds
 

@@ -48,7 +48,8 @@ This is a meta/control repository that implements the [Central Publish Repositor
             version: ${{ github.event.inputs.version }}
             force: ${{ github.event.inputs.force }}
     ```
-1. Make sure you don't have branch protections enabled on your repository or the [releases team](https://github.com/orgs/getsentry/teams/releases) is added to your repository as an admin with the "Include administrators" option disabled so we can automatically merge or push to master during the release flows
+1. Make sure you don't have branch protections enabled on your repository or the [releases team](https://github.com/orgs/getsentry/teams/releases) is added to your repository as an admin with the "Include administrators" option disabled so we can automatically merge or push to master during the release flows.
+Also make sure the [engineering team](https://github.com/orgs/getsentry/teams/engineering) has admin access to the repo.
 
 ## Usage
 

@@ -22,31 +22,34 @@ This is a meta/control repository that implements the [Central Publish Repositor
 1. Add [action-prepare-release](https://github.com/getsentry/action-prepare-release/) to your project in a release workflow under `.github/workflows/release.yml`:
     ```yaml
     name: Release
+
     on:
-    workflow_dispatch:
-      inputs:
-      version:
-        description: Version to release
-        required: true
-      force:
-        description: Force a release even when there are release-blockers (optional)
-        required: false
+      workflow_dispatch:
+        inputs:
+        version:
+          description: Version to release
+          required: true
+        force:
+          description: Force a release even when there are release-blockers (optional)
+          required: false
+
     jobs:
-    release:
-      runs-on: ubuntu-latest
-      name: 'Release a new version'
-      steps:
-        - uses: actions/checkout@v2
-          with:
-            token: ${{ secrets.GH_RELEASE_PAT }}
-            fetch-depth: 0
-        - name: Prepare release
-          uses: getsentry/action-prepare-release@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
-          with:
-            version: ${{ github.event.inputs.version }}
-            force: ${{ github.event.inputs.force }}
+      release:
+        runs-on: ubuntu-latest
+        name: 'Release a new version'
+        steps:
+          - uses: actions/checkout@v2
+            with:
+              token: ${{ secrets.GH_RELEASE_PAT }}
+              fetch-depth: 0
+
+          - name: Prepare release
+            uses: getsentry/action-prepare-release@v1
+            env:
+              GITHUB_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
+            with:
+              version: ${{ github.event.inputs.version }}
+              force: ${{ github.event.inputs.force }}
     ```
 1. Make sure you don't have branch protections enabled on your repository or the [releases team](https://github.com/orgs/getsentry/teams/releases) is added to your repository as an admin with the "Include administrators" option disabled so we can automatically merge or push to master during the release flows.
 Also make sure the [engineering team](https://github.com/orgs/getsentry/teams/engineering) has write access to the repo.

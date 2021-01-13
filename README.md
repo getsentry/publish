@@ -65,7 +65,7 @@ Also make sure the [engineering team](https://github.com/orgs/getsentry/teams/en
 ## CalVer
 
 1. You need to add `calver: true` under the `with` block of the `Prepare release` step to enable automatic version determination
-1. You also need to whitelist your repository here in the [`calver workflow`](https://github.com/getsentry/publish/blob/main/.github/workflows/calver.yml#L9-L13)
+1. You also need to add your repository to the list in the [`calver workflow`](https://github.com/getsentry/publish/blob/main/.github/workflows/calver.yml#L9-L13)
 
 ## Under the hood
 

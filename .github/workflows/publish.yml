@@ -47,6 +47,8 @@ jobs:
         run: |
           mv __github_repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/** .
           rm -rf __github_repo__
+          pwd
+          ls -lah
 
       - uses: getsentry/craft@master
         name: Publish using Craft

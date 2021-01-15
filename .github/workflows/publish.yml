@@ -13,7 +13,7 @@ jobs:
         uses: actions/github-script@v3
         with:
           script: |
-            const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^@]+)(?<path>\/[\w.\/]+)?@(?<version>[\w.]+)$/;
+            const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./]+)?@(?<version>[\w.]+)$/;
             const titleMatch = context.payload.issue.title.match(titleParser).groups;
             const dry_run = context.payload.issue.labels.some(l => l.name === 'dry-run') ? '1' : '';
             const path = '.' + (titleMatch.path || '');
@@ -33,6 +33,7 @@ jobs:
               issue_number: context.payload.issue.number,
               body: `Publishing: [run#${context.runId}](${workflowInfo.html_url})`,
             });
+
       - uses: actions/checkout@v2
         name: Check out target repo
         if: ${{ steps.inputs.outputs.result }}
@@ -41,10 +42,12 @@ jobs:
           repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
           fetch-depth: 0
+
       - name: Set working directory
         run: |
           mv __github_repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/** .
           rm -rf __github_repo__
+
       - uses: getsentry/craft@master
         name: Publish using Craft
         with:
@@ -66,6 +69,7 @@ jobs:
           TWINE_USERNAME: "__token__"
           TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Inform about failure
         if: ${{ failure() }}
         uses: actions/github-script@v3
@@ -81,6 +85,7 @@ jobs:
               issue_number: context.payload.issue.number,
               body: `Failed to publish: [run#${context.runId}](${workflowInfo.html_url})`,
             });
+
       - name: Close on success
         if: ${{ success() }}
         uses: actions/github-script@v3

@@ -44,11 +44,11 @@ jobs:
           fetch-depth: 0
 
       - name: Set working directory
+        shell: bash
         run: |
+          shopt -s dotglob
           mv __github_repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/** .
           rm -rf __github_repo__
-          pwd
-          ls -lah
 
       - uses: getsentry/craft@master
         name: Publish using Craft

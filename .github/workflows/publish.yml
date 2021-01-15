@@ -42,7 +42,7 @@ jobs:
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
           fetch-depth: 0
       - name: Set working directory
-        runs: |
+        run: |
           mv __github_repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/** .
           rm -rf __github_repo__
       - uses: getsentry/craft@master

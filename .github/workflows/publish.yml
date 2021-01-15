@@ -13,7 +13,7 @@ jobs:
         uses: actions/github-script@v3
         with:
           script: |
-            const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w.-_/]+)?@(?<version>[\w.]+)$/;
+            const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./_-]+)?@(?<version>[\w.]+)$/;
             const titleMatch = context.payload.issue.title.match(titleParser).groups;
             const dry_run = context.payload.issue.labels.some(l => l.name === 'dry-run') ? '1' : '';
             const path = '.' + (titleMatch.path || '');

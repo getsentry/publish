@@ -80,6 +80,7 @@ jobs:
         uses: actions/github-script@v3
         env:
           RELEASE_VERSION: ${{ fromJSON(steps.inputs.outputs.result).version }}
+          TARGET_REPO: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
         with:
           script: |
             const repoInfo = context.repo;
@@ -90,7 +91,7 @@ jobs:
             await github.issues.createComment({
               ...repoInfo,
               issue_number: context.payload.issue.number,
-              body: `Failed to publish: [run#${context.runId}](${workflowInfo.html_url})\n\n_Bad branch? You can [delete with ease](https://github.com/${repoInfo.owner}/${repoInfo.repo}/branches/all?query=${encodeURIComponent(process.env.RELEASE_VERSION)}) and start over._`,
+              body: `Failed to publish: [run#${context.runId}](${workflowInfo.html_url})\n\n_Bad branch? You can [delete with ease](https://github.com/${process.env.TARGET_REPO}/branches/all?query=${encodeURIComponent(process.env.RELEASE_VERSION)}) and start over._`,
             });
 
       - name: Close on success

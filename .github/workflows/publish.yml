@@ -89,13 +89,13 @@ jobs:
               run_id: context.runId,
             })).data;
             const issue_number = context.payload.issue.number;
-            Promise.all(
-              await github.issues.createComment({
+            await Promise.all(
+              github.issues.createComment({
                 ...repoInfo,
                 issue_number,
                 body: `Failed to publish: [run#${context.runId}](${workflowInfo.html_url})\n\n_Bad branch? You can [delete with ease](https://github.com/${process.env.TARGET_REPO}/branches/all?query=${encodeURIComponent(process.env.RELEASE_VERSION)}) and start over._`,
               }),
-              await github.issues.removeLabel({
+              github.issues.removeLabel({
                 ...repoInfo,
                 issue_number,
                 name: 'accepted',

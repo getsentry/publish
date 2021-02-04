@@ -88,11 +88,19 @@ jobs:
               ...repoInfo,
               run_id: context.runId,
             })).data;
-            await github.issues.createComment({
-              ...repoInfo,
-              issue_number: context.payload.issue.number,
-              body: `Failed to publish: [run#${context.runId}](${workflowInfo.html_url})\n\n_Bad branch? You can [delete with ease](https://github.com/${process.env.TARGET_REPO}/branches/all?query=${encodeURIComponent(process.env.RELEASE_VERSION)}) and start over._`,
-            });
+            const issue_number = context.payload.issue.number;
+            Promise.all(
+              await github.issues.createComment({
+                ...repoInfo,
+                issue_number,
+                body: `Failed to publish: [run#${context.runId}](${workflowInfo.html_url})\n\n_Bad branch? You can [delete with ease](https://github.com/${process.env.TARGET_REPO}/branches/all?query=${encodeURIComponent(process.env.RELEASE_VERSION)}) and start over._`,
+              }),
+              await github.issues.removeLabel({
+                ...repoInfo,
+                issue_number,
+                name: 'accepted',
+              }),
+            );
 
       - name: Close on success
         if: ${{ success() }}

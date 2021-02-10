@@ -89,7 +89,7 @@ jobs:
               run_id: context.runId,
             })).data;
             const issue_number = context.payload.issue.number;
-            await Promise.all(
+            await Promise.all([
               github.issues.createComment({
                 ...repoInfo,
                 issue_number,
@@ -100,7 +100,7 @@ jobs:
                 issue_number,
                 name: 'accepted',
               }),
-            );
+            ]);
 
       - name: Close on success
         if: ${{ success() }}

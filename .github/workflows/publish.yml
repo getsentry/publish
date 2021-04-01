@@ -22,7 +22,7 @@ jobs:
             const targetsMatch = context.payload.issue.body.match(targetsParser);
             let targets;
             if (targetsMatch) {
-              const targetMatcher = /^ - \[ \] ([\w.\[\]-]+)$/gm;
+              const targetMatcher = /^ *- \[ \] ([\w.\[\]-]+)$/gm;
               targets = Array.from(targetsMatch[1].matchAll(targetMatcher)).map(x => x[1]);
             }
 

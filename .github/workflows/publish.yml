@@ -17,7 +17,16 @@ jobs:
             const titleMatch = context.payload.issue.title.match(titleParser).groups;
             const dry_run = context.payload.issue.labels.some(l => l.name === 'dry-run') ? '1' : '';
             const path = '.' + (titleMatch.path || '');
-            return {...titleMatch, path, dry_run};
+
+            const targetsParser = /^### Targets$\s((?: - \[ \] [\w.\[\]-]+$\n?)+)/m;
+            const targetsMatch = context.payload.issue.body.match(targetsParser);
+            let targets;
+            if (targetsMatch) {
+              const targetMatcher = /^ - \[ \] ([\w.\[\]-]+)$/gm;
+              targets = Array.from(targetsMatch[1].matchAll(targetMatcher)).map(x => x[1]);
+            }
+
+            return {...titleMatch, path, dry_run, targets};
       - name: "Inform start"
         if: steps.inputs.outcome == 'success'
         uses: actions/github-script@v3
@@ -49,6 +58,15 @@ jobs:
           shopt -s dotglob
           mv __github_repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/** .
           rm -rf __github_repo__
+      
+      - name: Set targets
+        shell: bash
+        if: fromJSON(steps.inputs.outputs.result).targets
+        run: >
+          jq -n --argjson
+           source 'fromJSON(steps.inputs.outputs.result).targets'
+           '[{($source[]): true}] | add | {"published": . }'
+           > .craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
       - uses: getsentry/craft@master
         name: Publish using Craft

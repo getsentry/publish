@@ -65,7 +65,7 @@ jobs:
         run: >
           jq -n --argjson
           source '${{ toJSON(fromJSON(steps.inputs.outputs.result).targets) }}'
-          '[{($source[]): true }] | add | {"published": . }'
+          '[{($source[]): true }] | add | {"published": (. // {}) }'
           > .craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
       - uses: getsentry/craft@master

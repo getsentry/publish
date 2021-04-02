@@ -64,9 +64,9 @@ jobs:
         if: fromJSON(steps.inputs.outputs.result).targets
         run: >
           jq -n --argjson
-           source 'fromJSON(steps.inputs.outputs.result).targets'
-           '[{($source[]): true}] | add | {"published": . }'
-           > .craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
+          source '${{ fromJSON(steps.inputs.outputs.result).targets }}'
+          '[{($source[]): true}] | add | {"published": . }'
+          > .craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
       - uses: getsentry/craft@master
         name: Publish using Craft

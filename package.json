@@ -10,5 +10,11 @@
   "volta": {
     "node": "14.16.1",
     "yarn": "1.22.5"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^26.6.3"
   }
 }

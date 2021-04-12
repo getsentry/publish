@@ -17,7 +17,7 @@ jobs:
         uses: actions/github-script@v3
         with:
           script: |
-            const { default: inputs } = await import(`${process.env.HOME}/_publish/src/publish/inputs.js`);
+            const { default: inputs } = await import(`${process.env.HOME}/_publish/src/publish/inputs.mjs`);
             return await inputs({context});
             
       - name: "Inform start"
@@ -25,7 +25,7 @@ jobs:
         uses: actions/github-script@v3
         with:
           script: |
-            const { default: start } = await import(`${process.env.HOME}/_publish/src/publish/start.js`);
+            const { default: start } = await import(`${process.env.HOME}/_publish/src/publish/start.mjs`);
             return await start({context, github});
 
       - uses: actions/checkout@v2
@@ -85,7 +85,7 @@ jobs:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
-            const { default: fail } = await import(`${process.env.HOME}/_publish/src/publish/fail.js`);
+            const { default: fail } = await import(`${process.env.HOME}/_publish/src/publish/fail.mjs`);
             return await fail({context, github});
 
       - name: Close on success
@@ -93,5 +93,5 @@ jobs:
         uses: actions/github-script@v3
         with:
           script: |
-            const { default: success } = await import(`${process.env.HOME}/_publish/src/publish/success.js`);
+            const { default: success } = await import(`${process.env.HOME}/_publish/src/publish/success.mjs`);
             return await success({context, github});

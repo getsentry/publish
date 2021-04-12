@@ -1,4 +1,4 @@
-export default async function inputs({context}) {
+exports.default = async function inputs({context}) {
   const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./-]+)?@(?<version>[\w.-]+)$/;
   const titleMatch = context.payload.issue.title.match(titleParser).groups;
   const dry_run = context.payload.issue.labels.some((l) => l.name === "dry-run")
@@ -17,4 +17,4 @@ export default async function inputs({context}) {
   }
 
   return {...titleMatch, path, dry_run, targets};
-}
+};

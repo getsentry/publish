@@ -85,8 +85,9 @@ jobs:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
+            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
             const { default: fail } = await import(`${process.env.HOME}/_publish/src/publish/fail.mjs`);
-            return await fail({context, github});
+            return await fail({context, github, inputs});
 
       - name: Close on success
         if: ${{ success() }}

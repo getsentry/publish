@@ -1,5 +1,5 @@
-export default async function fail({context, github}) {
-  const {repo, version} = JSON.parse(process.env.PUBLISH_ARGS);
+export default async function fail({context, github, inputs}) {
+  const {repo, version} = inputs;
 
   const repoInfo = context.repo;
   const workflowInfo = (

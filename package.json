@@ -1,0 +1,14 @@
+{
+  "name": "publish",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Approval-based publishing system for Sentry",
+  "main": "index.js",
+  "repository": "git@github.com:getsentry/publish.git",
+  "author": "Sentry Open Source <oss@sentry.io>",
+  "license": "Apache-2",
+  "volta": {
+    "node": "14.16.1",
+    "yarn": "1.22.5"
+  }
+}

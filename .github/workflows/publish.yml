@@ -8,40 +8,25 @@ jobs:
     name: "Publish a new version"
     if: github.event.label.name == 'accepted'
     steps:
+      - name: "Get repo contents"
+        uses: actions/checkout@v2
+        with:
+          path: "${{ env.HOME }}/_publish"
       - name: "Parse and set inputs"
         id: inputs
         uses: actions/github-script@v3
         with:
           script: |
-            const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./-]+)?@(?<version>[\w.-]+)$/;
-            const titleMatch = context.payload.issue.title.match(titleParser).groups;
-            const dry_run = context.payload.issue.labels.some(l => l.name === 'dry-run') ? '1' : '';
-            const path = '.' + (titleMatch.path || '');
-
-            const targetsParser = /^### Targets$\s((?: *- \[[ x]\] [\w.\[\]-]+$\n?)+)/m;
-            const targetsMatch = context.payload.issue.body.match(targetsParser);
-            let targets;
-            if (targetsMatch) {
-              const targetMatcher = /^ *- \[x\] ([\w.\[\]-]+)$/gim;
-              targets = Array.from(targetsMatch[1].matchAll(targetMatcher)).map(x => x[1]);
-            }
-
-            return {...titleMatch, path, dry_run, targets};
+            const { default: inputs } = await import(`${process.env.HOME}/_publish/src/publish/inputs.mjs`);
+            return await inputs({context});
+            
       - name: "Inform start"
         if: steps.inputs.outcome == 'success'
         uses: actions/github-script@v3
         with:
           script: |
-            const repoInfo = context.repo;
-            const workflowInfo = (await github.actions.getWorkflowRun({
-              ...repoInfo,
-              run_id: context.runId,
-            })).data;
-            await github.issues.createComment({
-              ...repoInfo,
-              issue_number: context.payload.issue.number,
-              body: `Publishing: [run#${context.runId}](${workflowInfo.html_url})`,
-            });
+            const { default: start } = await import(`${process.env.HOME}/_publish/src/publish/start.mjs`);
+            return await start({context, github});
 
       - uses: actions/checkout@v2
         name: Check out target repo
@@ -97,46 +82,17 @@ jobs:
         if: ${{ failure() }}
         uses: actions/github-script@v3
         env:
-          RELEASE_VERSION: ${{ fromJSON(steps.inputs.outputs.result).version }}
-          TARGET_REPO: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
+          PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
-            const repoInfo = context.repo;
-            const workflowInfo = (await github.actions.getWorkflowRun({
-              ...repoInfo,
-              run_id: context.runId,
-            })).data;
-            const issue_number = context.payload.issue.number;
-            await Promise.all([
-              github.issues.createComment({
-                ...repoInfo,
-                issue_number,
-                body: `Failed to publish: [run#${context.runId}](${workflowInfo.html_url})\n\n_Bad branch? You can [delete with ease](https://github.com/${process.env.TARGET_REPO}/branches/all?query=${encodeURIComponent(process.env.RELEASE_VERSION)}) and start over._`,
-              }),
-              github.issues.removeLabel({
-                ...repoInfo,
-                issue_number,
-                name: 'accepted',
-              }),
-            ]);
+            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
+            const { default: fail } = await import(`${process.env.HOME}/_publish/src/publish/fail.mjs`);
+            return await fail({context, github, inputs});
 
       - name: Close on success
         if: ${{ success() }}
         uses: actions/github-script@v3
         with:
           script: |
-            const repoInfo = context.repo;
-            const workflowInfo = (await github.actions.getWorkflowRun({
-              ...repoInfo,
-              run_id: context.runId,
-            })).data;
-            await github.issues.createComment({
-              ...repoInfo,
-              issue_number: context.payload.issue.number,
-              body: `Published successfully: [run#${context.runId}](${workflowInfo.html_url})`,
-            });
-            await github.issues.update({
-              ...repoInfo,
-              issue_number: context.payload.issue.number,
-              state: 'closed'
-            });
+            const { default: success } = await import(`${process.env.HOME}/_publish/src/publish/success.mjs`);
+            return await success({context, github});

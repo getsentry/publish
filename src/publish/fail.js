@@ -1,4 +1,4 @@
-export default async function fail({context, github, inputs}) {
+exports.default = async function fail({context, github, inputs}) {
   const {repo, version} = inputs;
 
   const repoInfo = context.repo;
@@ -25,4 +25,4 @@ export default async function fail({context, github, inputs}) {
       name: "accepted",
     }),
   ]);
-}
+};

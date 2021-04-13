@@ -29,7 +29,7 @@ exports.default = async function fail({context, github, inputs}) {
       craftStateRequest,
     ]);
 
-    const targetsParser = /^### Targets$\s((?: *- \[[ x]\] [\w.\[\]-]+$\n?)+)/m;
+    const targetsParser = /^### Targets$\s(^(?: *- \[[ x]\] [\w.\[\]-]+[ ]*$\n?)+)/m;
     const declaredTargets = new Set();
     let leadingSpaces = " ";
     const newIssueBody = issue.body.replace(

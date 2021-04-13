@@ -135,9 +135,9 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
         - [x] github
         - [ ] pypi
         - [ ] docker[release]
+        - [ ] docker[latest]
         - [x] lol
         - [ ] hey
-        - [ ] docker[latest]  
         ",
             "issue_number": "211",
             "owner": "getsentry",

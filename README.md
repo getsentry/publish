@@ -26,12 +26,12 @@ This is a meta/control repository that implements the [Central Publish Repositor
     on:
       workflow_dispatch:
         inputs:
-        version:
-          description: Version to release
-          required: true
-        force:
-          description: Force a release even when there are release-blockers (optional)
-          required: false
+          version:
+            description: Version to release
+            required: true
+          force:
+            description: Force a release even when there are release-blockers (optional)
+            required: false
 
     jobs:
       release:

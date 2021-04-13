@@ -11,13 +11,13 @@ jobs:
       - name: "Get repo contents"
         uses: actions/checkout@v2
         with:
-          path: "${{ env.HOME }}/_publish"
+          path: ".__publish__"
       - name: "Parse and set inputs"
         id: inputs
         uses: actions/github-script@v3
         with:
           script: |
-            const inputs = require(`${process.env.HOME}/_publish/src/publish/inputs.js`).default;
+            const inputs = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/inputs.js`).default;
             return await inputs({context});
             
       - name: "Inform start"
@@ -25,7 +25,7 @@ jobs:
         uses: actions/github-script@v3
         with:
           script: |
-            const start = require(`${process.env.HOME}/_publish/src/publish/start.js`).default;
+            const start = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/start.js`).default;
             return await start({context, github});
 
       - uses: actions/checkout@v2
@@ -43,6 +43,10 @@ jobs:
           shopt -s dotglob
           mv __github_repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/** .
           rm -rf __github_repo__
+          if [[ -d .git ]]; then
+            # Ignore the utility .__publish__ folder for all git ops
+            echo ".__publish__" >> .git/info/exclude
+          fi;
       
       - name: Set targets
         shell: bash
@@ -86,7 +90,7 @@ jobs:
         with:
           script: |
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const fail = require(`${process.env.HOME}/_publish/src/publish/fail.js`).default;
+            const fail = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/fail.js`).default;
             return await fail({context, github, inputs});
 
       - name: Close on success
@@ -94,5 +98,5 @@ jobs:
         uses: actions/github-script@v3
         with:
           script: |
-            const success = require(`${process.env.HOME}/_publish/src/publish/success.js`).default;
+            const success = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/success.js`).default;
             return await success({context, github});

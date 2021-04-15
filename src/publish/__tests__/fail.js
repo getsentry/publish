@@ -131,7 +131,8 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
         - [View check runs](https://github.com/getsentry/sentry/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)
 
         Assign the **accepted** label to this issue to approve the release.
-
+        
+        ### Targets
         - [x] github
         - [ ] pypi
         - [ ] docker[release]

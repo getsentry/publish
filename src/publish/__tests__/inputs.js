@@ -34,12 +34,12 @@ Quick links:
 
 Assign the **accepted** label to this issue to approve the release.
 
-### Targets
- - [x] github
- - [x] pypi
+### Targets\r
+ - [x] github\r
+ - [x] pypi\r
  - [ ] docker[release]
- - [ ] docker[latest]
-    `,
+ - [ ] docker[latest]\r
+`,
         labels: ["accepted"],
       },
     },

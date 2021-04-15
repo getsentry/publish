@@ -61,12 +61,12 @@ Quick links:
 - [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)
 - [View check runs](https://github.com/getsentry/sentry/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)
 
-Assign the **accepted** label to this issue to approve the release.
+Assign the **accepted** label to this issue to approve the release.\r
 
-### Targets
+### Targets\r
 - [ ] github
-- [ ] pypi
-- [ ] docker[release]
+- [ ] pypi\r
+- [ ] docker[release]\r
 - [ ] docker[latest]  
 `,
     },

@@ -26,7 +26,7 @@ const inputsArgs = deepFreeze({
         number: "223",
         title: "publish: getsentry/sentry@21.3.1",
         body: `
-    Requested by: @BYK
+Requested by: @BYK
 
 Quick links:
 - [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)

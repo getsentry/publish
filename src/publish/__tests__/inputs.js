@@ -36,9 +36,9 @@ Assign the **accepted** label to this issue to approve the release.
 
 ### Targets\r
  - [x] github\r
- - [x] pypi\r
+ - [ ] pypi\r
  - [ ] docker[release]
- - [ ] docker[latest]\r
+ - [x] docker[latest]\r
 `,
         labels: ["accepted"],
       },
@@ -55,7 +55,7 @@ test("parse inputs", async () => {
       "repo": "sentry",
       "targets": Array [
         "github",
-        "pypi",
+        "docker[latest]",
       ],
       "version": "21.3.1",
     }

@@ -29,36 +29,33 @@ exports.default = async function fail({context, github, inputs}) {
       craftStateRequest,
     ]);
 
-    const targetsParser = /^### Targets$\s(^(?: *- \[[ x]\] [\w.\[\]-]+[ ]*$\n?)+)/m;
+    const targetsParser = /^(?!### Targets$\s)^(?: *- \[[ x]\] [\w.\[\]-]+[ ]*$(?:\r?\n)?)+/m;
     const declaredTargets = new Set();
     let leadingSpaces = " ";
-    const newIssueBody = issue.body.replace(
-      targetsParser,
-      (_match, targetsSection) => {
-        let targetsText = targetsSection.trimRight();
-        const targetMatcher = /^( *)- \[[ x]\] ([\w.\[\]-]+)$/gim;
-        targetsText = targetsText.replace(
-          targetMatcher,
-          (_match, spaces, target) => {
-            leadingSpaces = spaces;
-            declaredTargets.add(target);
-            const x = craftState.published[target] ? "x" : " ";
-            return `${spaces}- [${x}] ${target}`;
-          },
-        );
-        const unlistedTargets = Object.keys(craftState.published)
-          .filter((target) => !declaredTargets.has(target))
-          .map(
-            (target) =>
-              `${leadingSpaces}- [${
-                craftState.published[target] ? "x" : " "
-              }] ${target}`,
-          )
-          .join("\n");
-        targetsText += `\n${unlistedTargets}\n`;
-        return targetsText;
-      },
-    );
+    const newIssueBody = issue.body.replace(targetsParser, (targetsSection) => {
+      let targetsText = targetsSection.trimRight();
+      const targetMatcher = /^( *)- \[[ x]\] ([\w.\[\]-]+)$/gim;
+      targetsText = targetsText.replace(
+        targetMatcher,
+        (_match, spaces, target) => {
+          leadingSpaces = spaces;
+          declaredTargets.add(target);
+          const x = craftState.published[target] ? "x" : " ";
+          return `${spaces}- [${x}] ${target}`;
+        },
+      );
+      const unlistedTargets = Object.keys(craftState.published)
+        .filter((target) => !declaredTargets.has(target))
+        .map(
+          (target) =>
+            `${leadingSpaces}- [${
+              craftState.published[target] ? "x" : " "
+            }] ${target}`,
+        )
+        .join("\n");
+      targetsText += `\n${unlistedTargets}\n`;
+      return targetsText;
+    });
 
     updateIssueBodyRequest = github.issues.update({
       ...repoInfo,

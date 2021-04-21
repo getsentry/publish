@@ -1,6 +1,6 @@
 # Sentry Publish 🏠
 
-This is a meta/control repository that implements the [Central Publish Repository](https://www.notion.so/beb8598dab6f4f11ba1ca42c211f04f0) RFC
+This is a meta/control repository that implements the [Central Publish Repository](docs/rfc.md) RFC
 
 ## Goals
 
@@ -12,12 +12,9 @@ This is a meta/control repository that implements the [Central Publish Repositor
 
 ## Setup
 
-1. Set up [Craft](https://github.com/getsentry/craft/) for your repo and use GitHub as status and artifacts provider:
+1. Set up [Craft](https://github.com/getsentry/craft/) for your repo and add `0.21.0` as `minVersion`:
     ```yaml
-    statusProvider:
-      name: github
-    artifactProvider:
-      name: github
+    minVersion: '0.21.0'
     ```
 1. Add [action-prepare-release](https://github.com/getsentry/action-prepare-release/) to your project in a release workflow under `.github/workflows/release.yml`:
     ```yaml
@@ -51,8 +48,8 @@ This is a meta/control repository that implements the [Central Publish Repositor
               version: ${{ github.event.inputs.version }}
               force: ${{ github.event.inputs.force }}
     ```
-1. Make sure you don't have branch protections enabled on your repository or the [release-bot team](https://github.com/orgs/getsentry/teams/release-bot) is added to your repository as an admin with the "Include administrators" option disabled so we can automatically merge or push to master during the release flows.
-Also make sure the [engineering team](https://github.com/orgs/getsentry/teams/engineering) has write access to the repo.
+1. Make sure you don't have branch protections enabled on your repository or the [release-bot team](https://github.com/orgs/getsentry/teams/release-bot) is added to your repository as an admin with the "Include administrators" option disabled. This is to ensure we can automatically merge or push to master during the release flows with our bot.
+Also make sure the [engineering team](https://github.com/orgs/getsentry/teams/engineering) has write access to the repo. This is to ensure access of [getsentry-release](https://github.com/getsentry-release) bot.
 
 ## Usage
 
@@ -69,8 +66,8 @@ Also make sure the [engineering team](https://github.com/orgs/getsentry/teams/en
 
 ## Under the hood
 
-The system uses [Craft](https://github.com/getsentry/craft) under the hood to prepare and publish releases. It uses `GH_SENTRY_BOT_PAT` personal access token, tied to the [getsentry-bot](https://github.com/getsentry-bot) account to perform repository actions automatically. This account is a member of the [release-bot team](https://github.com/orgs/getsentry/teams/release-bot) along with some other members.
+The system uses [Craft](https://github.com/getsentry/craft) under the hood to prepare and publish releases. It uses `GH_SENTRY_BOT_PAT` personal access token, tied to the [getsentry-bot](https://github.com/getsentry-bot) account to perform repository actions automatically. This account is a member of the [release-bot team](https://github.com/orgs/getsentry/teams/release-bot). The reason for using a team is to ease role-based ACLs and making the rotation of the bot account itself if/when needed.
 
-This repo is read-only for everyone except for release managers. This is because all sensitive secrets such as admin-level GitHub access tokens or package repository publishing tokens (npm, PyPI, cargo, etc.) are defined in this repository and anyone with write access can create or trigger an arbitrary GitHub action workflow, exposing these secrets without any indication. See getsentry/sentry#21930 for an example.
+This repo is read-only for everyone except for release managers. This is because all sensitive secrets such as admin-level GitHub access tokens or package repository publishing tokens (npm, PyPI, cargo, etc.) are defined in this repository as secrets and anyone with write access can create or trigger an arbitrary GitHub action workflow, exposing these secrets without any indication. See getsentry/sentry#21930 for an example.
 
-Due to the same reason above, [action-prepare-release](https://github.com/getsentry/action-prepare-release/) needs yet another bot account, [getsentry-release](https://github.com/getsentry-release) that is defined as a regular member of the [engineering team](https://github.com/orgs/getsentry/teams/engineering) to have read access to this private repo. This is to automatically create publish request issues from the action. The access token for this account is called `GH_RELEASE_PAT` and it is defined at the organization level.
+Due to the same reason above, [action-prepare-release](https://github.com/getsentry/action-prepare-release/) needs yet another bot account, [getsentry-release](https://github.com/getsentry-release) that is defined as a regular member of the [engineering team](https://github.com/orgs/getsentry/teams/engineering) to have read access to this private repo. This is to automatically create publish request issues from the action. We cannot use `GITHUB_TOKEN` for these actions as [GitHub prevents triggering more workflows via this token](https://docs.github.com/en/actions/reference/events-that-trigger-workflows). The access token for this account is called `GH_RELEASE_PAT` and it is defined at the organization level.

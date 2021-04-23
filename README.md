@@ -2,6 +2,10 @@
 
 This is a meta/control repository that implements the [Central Publish Repository](docs/rfc.md) RFC
 
+## Flow Chart
+
+[![Flow Chart](https://app.code2flow.com/JG4Lgh6rOKdA.png)](https://app.code2flow.com/JG4Lgh6rOKdA)
+
 ## Goals
 
  1. We do not want employees to publish through their own accounts

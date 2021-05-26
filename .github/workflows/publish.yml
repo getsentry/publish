@@ -32,22 +32,11 @@ jobs:
         name: Check out target repo
         if: ${{ steps.inputs.outputs.result }}
         with:
-          path: "__github_repo__"
+          path: "__repo__"
           repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
           fetch-depth: 0
 
-      - name: Set working directory
-        shell: bash
-        run: |
-          shopt -s dotglob
-          mv __github_repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/** .
-          rm -rf __github_repo__
-          if [[ -d .git ]]; then
-            # Ignore the utility .__publish__ folder for all git ops
-            echo ".__publish__" >> .git/info/exclude
-          fi;
-      
       - name: Set targets
         shell: bash
         if: fromJSON(steps.inputs.outputs.result).targets
@@ -55,15 +44,18 @@ jobs:
           jq -n --argjson
           source '${{ toJSON(fromJSON(steps.inputs.outputs.result).targets) }}'
           '[{($source[]): true }] | add | {"published": (. // {}) }'
-          > .craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
+          > __repo__/.craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
       - uses: getsentry/craft@master
         name: Publish using Craft
         with:
           action: publish
-          version: ${{ fromJSON(steps.inputs.outputs.result).version }}
+          entrypoint: /bin/bash
+          args: |
+            cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }}
+            craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}
         env:
-          DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}
+          CRAFT_DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}
           GIT_COMMITTER_NAME: getsentry-bot
           GIT_AUTHOR_NAME: getsentry-bot
           EMAIL: bot@getsentry.com

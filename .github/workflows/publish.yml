@@ -46,11 +46,16 @@ jobs:
           '[{($source[]): true }] | add | {"published": (. // {}) }'
           > __repo__/.craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
-      - uses: getsentry/craft@master
+      - uses: docker://getsentry/craft:latest
         name: Publish using Craft
         with:
           entrypoint: /bin/bash
-          args: "-c 'cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }} && craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}'"
+          args: >-
+            -c '
+            set -e
+            cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }} &&
+            craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}
+            '
         env:
           CRAFT_DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}
           GIT_COMMITTER_NAME: getsentry-bot

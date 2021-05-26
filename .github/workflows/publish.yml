@@ -51,8 +51,8 @@ jobs:
         with:
           entrypoint: /bin/bash
           args: >-
+            -e
             -c '
-            set -e;
             cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }} &&
             craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}
             '

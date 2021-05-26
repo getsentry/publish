@@ -52,10 +52,9 @@ jobs:
           entrypoint: /bin/bash
           args: >-
             -e
-            -c '
-            cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }} &&
-            craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}
-            '
+            -c
+            'cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }};
+            craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}'
         env:
           CRAFT_DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}
           GIT_COMMITTER_NAME: getsentry-bot

@@ -50,7 +50,7 @@ jobs:
         name: Publish using Craft
         with:
           entrypoint: /bin/bash
-          args: "-c 'cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }} && craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}'
+          args: "-c 'cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }} && craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}'"
         env:
           CRAFT_DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}
           GIT_COMMITTER_NAME: getsentry-bot

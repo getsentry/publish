@@ -71,9 +71,9 @@ exports.default = async function fail({context, github, inputs}) {
     github.issues.createComment({
       ...repoInfo,
       issue_number,
-      body: `Failed to publish: [run#${context.runId}](${
+      body: `Failed to publish. ([error logs](${
         workflowInfo.html_url
-      })\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
+      }?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
         version,
       )}) and start over._`,
     }),

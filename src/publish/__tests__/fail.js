@@ -29,7 +29,7 @@ const failArgs = deepFreeze({
   },
   github: {
     actions: {
-      getWorkflowRun: async () => ({
+      getJobForWorkflowRun: async () => ({
         data: {
           html_url: "https://github.com/getsentry/sentry/runs/1234",
         },

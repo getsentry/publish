@@ -12,7 +12,7 @@ exports.default = async function fail({context, github, inputs}) {
   ).data;
   const issue_number = context.payload.issue.number;
 
-  const CRAFT_STATE_FILE_PATH = `${process.env.GITHUB_WORKSPACE}/.craft-publish-${version}.json`;
+  const CRAFT_STATE_FILE_PATH = `${process.env.GITHUB_WORKSPACE}/__repo__/.craft-publish-${version}.json`;
   let updateIssueBodyRequest;
   if (fs.existsSync(CRAFT_STATE_FILE_PATH)) {
     const issueRequest = github.issues.get({

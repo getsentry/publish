@@ -79,7 +79,9 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
     await fail(failArgs);
     expect(fs.existsSync).toHaveBeenCalledTimes(1);
     // This is process.env.GITHUB_WORKSPACE + / filename
-    expect(fs.existsSync).toHaveBeenCalledWith("./.craft-publish-21.3.1.json");
+    expect(fs.existsSync).toHaveBeenCalledWith(
+      "./__repo__/.craft-publish-21.3.1.json",
+    );
   });
 
   test("create comment", async () => {

@@ -29,9 +29,9 @@ const failArgs = deepFreeze({
   },
   github: {
     actions: {
-      getWorkflowRun: async () => ({
+      getJobForWorkflowRun: async () => ({
         data: {
-          html_url: "https://github.com/getsentry/sentry/actions/runs/1234",
+          html_url: "https://github.com/getsentry/sentry/runs/1234",
         },
       }),
     },
@@ -91,7 +91,7 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
       repo: "publish",
       issue_number: "211",
       body:
-        "Failed to publish. ([error logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
+        "Failed to publish. ([error logs](https://github.com/getsentry/sentry/runs/1234?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
     });
   });
 

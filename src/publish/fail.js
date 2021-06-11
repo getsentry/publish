@@ -4,11 +4,10 @@ exports.default = async function fail({context, github, inputs}) {
   const {repo, version} = inputs;
 
   const repoInfo = context.repo;
-  await github.actions.get;
   const workflowInfo = (
-    await github.actions.getJobForWorkflowRun({
+    await github.actions.getWorkflowRun({
       ...repoInfo,
-      job_id: context.job_id,
+      run_id: context.runId,
     })
   ).data;
   const issue_number = context.payload.issue.number;

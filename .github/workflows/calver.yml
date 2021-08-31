@@ -17,7 +17,7 @@ jobs:
       - uses: actions/github-script@v3
         with:
           # Do not use the built-in GITHUB_TOKEN so the adding of the accepted label
-          # runs the associated publish flow.
+          # runs the associated publish flow. See https://git.io/JEHZS for more info.
           github-token: ${{ secrets.GH_SENTRY_BOT_PAT }}
           script: |
             const fortnightInMs = 14*24*60*60*1000;

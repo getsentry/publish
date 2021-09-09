@@ -75,6 +75,7 @@ jobs:
           GEM_HOST_API_KEY: ${{ secrets.GEM_HOST_API_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          NUGET_API_TOKEN: ${{ secrets.NUGET_API_TOKEN }}
 
       - name: Inform about failure
         if: ${{ failure() }}

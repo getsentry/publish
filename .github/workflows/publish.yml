@@ -46,10 +46,7 @@ jobs:
           '[{($source[]): true }] | add | {"published": (. // {}) }'
           > __repo__/.craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
-        # due to a regression in craft c978bf605d7b4a3a6c297659e4a55f91b7a869f4 we need to pick
-        # a version lower than that.  Future craft releases currently create corrupted github
-        # artifacts.
-      - uses: docker://getsentry/craft:031aad308fd2a4f1b96f82dd8f881456bd8fea44
+      - uses: docker://getsentry/craft:latest
         name: Publish using Craft
         with:
           entrypoint: /bin/bash

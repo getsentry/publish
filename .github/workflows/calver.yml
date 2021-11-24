@@ -10,7 +10,7 @@ jobs:
       contains(github.event.issue.title, 'sentry') ||
       contains(github.event.issue.title, 'snuba') ||
       contains(github.event.issue.title, 'relay') ||
-      contains(github.event.issue.title, 'onpremise') ||
+      contains(github.event.issue.title, 'self-hosted') ||
       contains(github.event.issue.title, 'sentry-docs') ||
       contains(github.event.issue.title, 'develop')
     steps:

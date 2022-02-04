@@ -27,7 +27,7 @@ jobs:
 
       - name: Parse and set inputs
         id: inputs
-        uses: actions/github-script@v3
+        uses: actions/github-script@v5
         with:
           script: |
             const inputs = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/inputs.js`).default;
@@ -35,7 +35,7 @@ jobs:
 
       - name: Inform start
         if: steps.inputs.outcome == 'success'
-        uses: actions/github-script@v3
+        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
@@ -94,7 +94,7 @@ jobs:
 
       - name: Inform about failure
         if: ${{ failure() }}
-        uses: actions/github-script@v3
+        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
@@ -106,7 +106,7 @@ jobs:
 
       - name: Close on success
         if: ${{ success() }}
-        uses: actions/github-script@v3
+        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:

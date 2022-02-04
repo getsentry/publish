@@ -1,6 +1,8 @@
 const fs = require("fs");
+const sentry = require("../sentry");
 
 exports.default = async function fail({context, github, inputs}) {
+  sentry.initSentry({ inputs });
   const {repo, version} = inputs;
 
   const repoInfo = context.repo;
@@ -83,4 +85,6 @@ exports.default = async function fail({context, github, inputs}) {
       name: "accepted",
     }),
   ]);
+
+  sentry.captureFailedSession({ context, inputs });
 };

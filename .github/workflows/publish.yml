@@ -19,6 +19,7 @@ jobs:
         - uses: actions/setup-node@v2
           with:
             node-version: 14
+            cache: npm
         - run: npm install @sentry/node
 
       - name: "Parse and set inputs"

@@ -1,4 +1,5 @@
-const fs = require("fs");
+/* eslint-env jest */
+
 const inputs = require("../inputs.js").default;
 
 function deepFreeze(object) {

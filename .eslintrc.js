@@ -5,7 +5,6 @@ module.exports = {
     'plugin:yml/standard'
   ],
   rules: {
-    'yml/plain-scalar': 'off',
     'yml/no-empty-mapping-value': 'off'
   },
   parserOptions: {

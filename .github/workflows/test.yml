@@ -2,7 +2,7 @@ name: Test
 on:
   push:
     branches:
-      - "main"
+      - main
   pull_request:
 
 defaults:
@@ -11,7 +11,7 @@ defaults:
 jobs:
   unit-test:
     runs-on: ubuntu-20.04
-    name: "unit tests"
+    name: unit tests
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v2
@@ -23,6 +23,6 @@ jobs:
       - name: Install Dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: yarn install --frozen-lockfile
-      
+
       - name: Test
         run: yarn jest

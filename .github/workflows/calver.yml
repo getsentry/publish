@@ -5,7 +5,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    name: "Auto approve publishing CalVer releases"
+    name: Auto approve publishing CalVer releases
     if: >-
       contains(github.event.issue.title, 'sentry') ||
       contains(github.event.issue.title, 'snuba') ||

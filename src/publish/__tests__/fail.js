@@ -1,4 +1,9 @@
 jest.mock("fs");
+jest.mock("../../sentry", () => ({
+  initSentry: jest.fn(() => {}),
+  captureFailedSession: jest.fn(() => {}),
+  captureSuccessfulSession: jest.fn(() => {}),
+}));
 
 const fs = require("fs");
 const fail = require("../fail.js").default;

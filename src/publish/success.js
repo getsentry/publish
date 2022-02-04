@@ -1,4 +1,8 @@
-exports.default = async function success({context, github}) {
+const sentry = require("../sentry");
+
+exports.default = async function success({ context, github }) {
+  sentry.initSentry({ inputs });
+
   const repoInfo = context.repo;
   const workflowInfo = (
     await github.actions.getWorkflowRun({
@@ -20,4 +24,6 @@ exports.default = async function success({context, github}) {
       state: "closed",
     }),
   ]);
+
+  sentry.captureSuccessfulSession();
 };

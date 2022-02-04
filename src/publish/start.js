@@ -1,8 +1,4 @@
-const sentry = require("../sentry");
-
-exports.default = async function start({ context, github, inputs }) {
-  sentry.initSentry({ inputs });
-
+exports.default = async function start({ context, github }) {
   const repoInfo = context.repo;
   const workflowInfo = (
     await github.actions.getWorkflowRun({

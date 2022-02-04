@@ -1,8 +1,4 @@
-const sentry = require("../sentry");
-
-exports.default = async function success({ context, github }) {
-  sentry.initSentry({ inputs });
-
+exports.default = async function success({ context, github, Sentry }) {
   const repoInfo = context.repo;
   const workflowInfo = (
     await github.actions.getWorkflowRun({
@@ -25,5 +21,21 @@ exports.default = async function success({ context, github }) {
     }),
   ]);
 
-  sentry.captureSuccessfulSession();
+  const scope = new Sentry.Scope();
+  scope.setTag("repository", inputs.repo);
+  scope.setContext("release", {
+    issue_number: context.payload.issue.number,
+    inputs,
+  });
+
+  const client = new Sentry.NodeClient({
+    dsn: process.env.SENTRY_DSN,
+    release: `${inputs.repo}@${inputs.version}`,
+  });
+  client.captureMessage(
+    `Release succeeded: ${inputs.repo}`,
+    "info",
+    null,
+    scope
+  );
 };

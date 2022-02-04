@@ -20,7 +20,7 @@ function deepFreeze(object) {
 
 const inputsArgs = deepFreeze({
   context: {
-    repo: {owner: "getsentry", repo: "publish"},
+    repo: { owner: "getsentry", repo: "publish" },
     payload: {
       issue: {
         number: "223",

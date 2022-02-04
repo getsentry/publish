@@ -1,6 +1,4 @@
-const Sentry = require("@sentry/node");
-
-function initSentry({ inputs }) {
+function initSentry({ sentryClient, inputs }) {
   const config = {
     dsn: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838",
     release: `${inputs.repo}@${inputs.version}`,
@@ -8,24 +6,28 @@ function initSentry({ inputs }) {
     autoSessionTracking: false,
   };
 
-  Sentry.init(config);
+  sentryClient.init(config);
+
+  return sentryClient;
 }
 
-function captureFailedSession({ context, inputs }) {
-  const session = Sentry.getCurrentHub().startSession({ status: "crashed" });
-  Sentry.getCurrentHub().endSession(session);
-  Sentry.setTag("repository", inputs.repo);
-  Sentry.addBreadcrumb({
+function captureFailedSession({ sentryClient, context, inputs }) {
+  const session = sentryClient
+    .getCurrentHub()
+    .startSession({ status: "crashed" });
+  sentryClient.getCurrentHub().endSession(session);
+  sentryClient.setTag("repository", inputs.repo);
+  sentryClient.addBreadcrumb({
     message: "Release context",
-    category: Sentry.Severity.Log,
+    category: sentryClient.Severity.Log,
     data: { issue_number: context.payload.issue.number, inputs },
   });
-  Sentry.captureMessage(`Release failed: ${inputs.repo}`);
+  sentryClient.captureMessage(`Release failed: ${inputs.repo}`);
 }
 
-function captureSuccessfulSession() {
-  const session = Sentry.getCurrentHub().startSession({ status: "ok" });
-  Sentry.getCurrentHub().endSession(session);
+function captureSuccessfulSession({ sentryClient }) {
+  const session = sentryClient.getCurrentHub().startSession({ status: "ok" });
+  sentryClient.getCurrentHub().endSession(session);
 }
 
 module.exports = { initSentry, captureFailedSession, captureSuccessfulSession };

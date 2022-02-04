@@ -1,9 +1,14 @@
 const fs = require("fs");
-const sentry = require("../sentry");
 
-exports.default = async function fail({context, github, inputs}) {
-  sentry.initSentry({ inputs });
-  const {repo, version} = inputs;
+exports.default = async function fail({
+  context,
+  github,
+  inputs,
+  sentryClient,
+  sentryHelpers,
+}) {
+  const Sentry = sentryHelpers.initSentry({ sentryClient, inputs });
+  const { repo, version } = inputs;
 
   const repoInfo = context.repo;
   const workflowInfo = (
@@ -23,10 +28,10 @@ exports.default = async function fail({context, github, inputs}) {
     });
 
     const craftStateRequest = fs.promises
-      .readFile(CRAFT_STATE_FILE_PATH, {encoding: "utf-8"})
+      .readFile(CRAFT_STATE_FILE_PATH, { encoding: "utf-8" })
       .then((data) => JSON.parse(data));
 
-    const [{data: issue}, craftState] = await Promise.all([
+    const [{ data: issue }, craftState] = await Promise.all([
       issueRequest,
       craftStateRequest,
     ]);
@@ -44,7 +49,7 @@ exports.default = async function fail({context, github, inputs}) {
           declaredTargets.add(target);
           const x = craftState.published[target] ? "x" : " ";
           return `${spaces}- [${x}] ${target}`;
-        },
+        }
       );
       const unlistedTargets = Object.keys(craftState.published)
         .filter((target) => !declaredTargets.has(target))
@@ -52,7 +57,7 @@ exports.default = async function fail({context, github, inputs}) {
           (target) =>
             `${leadingSpaces}- [${
               craftState.published[target] ? "x" : " "
-            }] ${target}`,
+            }] ${target}`
         )
         .join("\n");
       targetsText += `\n${unlistedTargets}\n`;
@@ -76,7 +81,7 @@ exports.default = async function fail({context, github, inputs}) {
       body: `Failed to publish. ([error logs](${
         workflowInfo.html_url
       }?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
-        version,
+        version
       )}) and start over._`,
     }),
     github.issues.removeLabel({
@@ -86,5 +91,5 @@ exports.default = async function fail({context, github, inputs}) {
     }),
   ]);
 
-  sentry.captureFailedSession({ context, inputs });
+  sentryHelpers.captureFailedSession({ sentryClient: Sentry, context, inputs });
 };

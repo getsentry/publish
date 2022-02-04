@@ -1,7 +1,10 @@
-const sentry = require("../sentry");
-
-exports.default = async function success({ context, github }) {
-  sentry.initSentry({ inputs });
+exports.default = async function success({
+  context,
+  github,
+  sentryClient,
+  sentryHelpers,
+}) {
+  const Sentry = sentryHelpers.initSentry({ sentryClient, inputs });
 
   const repoInfo = context.repo;
   const workflowInfo = (
@@ -25,5 +28,5 @@ exports.default = async function success({ context, github }) {
     }),
   ]);
 
-  sentry.captureSuccessfulSession();
+  sentryHelpers.captureSuccessfulSession({ sentryClient: Sentry });
 };

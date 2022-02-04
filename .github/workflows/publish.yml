@@ -22,14 +22,20 @@ jobs:
 
       - name: "Inform start"
         if: steps.inputs.outcome == 'success'
-        uses: actions/github-script@v3
+        - uses: actions/github-script@v3
+        - uses: actions/setup-node@v2
+        with:
+          node-version: 14
+        - run: npm ci
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
+            const sentryClient = require("@sentry/node");
+            const sentryHelpers = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/sentry.js`);
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
             const start = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/start.js`).default;
-            return await start({context, github, inputs});
+            return await start({context, github, inputs, sentryClient, sentryHelpers});
 
       - uses: actions/checkout@v2
         name: Check out target repo
@@ -82,22 +88,34 @@ jobs:
 
       - name: Inform about failure
         if: ${{ failure() }}
-        uses: actions/github-script@v3
+        - uses: actions/github-script@v3
+        - uses: actions/setup-node@v2
+        with:
+          node-version: 14
+        - run: npm ci
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
+            const sentryClient = require("@sentry/node");
+            const sentryHelpers = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/sentry.js`);
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
             const fail = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/fail.js`).default;
-            return await fail({context, github, inputs});
+            return await fail({context, github, inputs, sentryClient, sentryHelpers});
 
       - name: Close on success
         if: ${{ success() }}
-        uses: actions/github-script@v3
+        - uses: actions/github-script@v3
+        - uses: actions/setup-node@v2
+        with:
+          node-version: 14
+        - run: npm ci
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
+            const sentryClient = require("@sentry/node");
+            const sentryHelpers = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/sentry.js`);
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
             const success = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/success.js`).default;
-            return await success({context, github, inputs});
+            return await success({context, github, inputs, sentryClient, sentryHelpers});

@@ -1,9 +1,4 @@
 jest.mock("fs");
-jest.mock("../../sentry", () => ({
-  initSentry: jest.fn(() => {}),
-  captureFailedSession: jest.fn(() => {}),
-  captureSuccessfulSession: jest.fn(() => {}),
-}));
 
 const fs = require("fs");
 const fail = require("../fail.js").default;
@@ -26,11 +21,11 @@ function deepFreeze(object) {
 }
 
 const failArgs = deepFreeze({
-  inputs: {repo: "sentry", version: "21.3.1"},
+  inputs: { repo: "sentry", version: "21.3.1" },
   context: {
     runId: "1234",
-    repo: {owner: "getsentry", repo: "publish"},
-    payload: {issue: {number: "211"}},
+    repo: { owner: "getsentry", repo: "publish" },
+    payload: { issue: { number: "211" } },
   },
   github: {
     actions: {
@@ -47,13 +42,19 @@ const failArgs = deepFreeze({
       removeLabel: jest.fn(),
     },
   },
+  sentryClient: { init: jest.fn() },
+  sentryHelpers: {
+    initSentry: jest.fn(),
+    captureFailedSession: jest.fn(),
+    captureSuccessfulSession: jest.fn(),
+  },
 });
 
 beforeAll(() => {
   process.env.GITHUB_WORKSPACE = ".";
   fs.promises = {};
   fs.promises.readFile = jest.fn(async () =>
-    JSON.stringify({published: {lol: true, hey: false, github: true}}),
+    JSON.stringify({ published: { lol: true, hey: false, github: true } })
   );
 
   failArgs.github.issues.get.mockReturnValue({
@@ -84,7 +85,7 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
     expect(fs.existsSync).toHaveBeenCalledTimes(1);
     // This is process.env.GITHUB_WORKSPACE + / filename
     expect(fs.existsSync).toHaveBeenCalledWith(
-      "./__repo__/.craft-publish-21.3.1.json",
+      "./__repo__/.craft-publish-21.3.1.json"
     );
   });
 

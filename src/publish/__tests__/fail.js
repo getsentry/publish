@@ -30,18 +30,20 @@ const failArgs = deepFreeze({
     payload: { issue: { number: "211" } },
   },
   github: {
-    actions: {
-      getWorkflowRun: async () => ({
-        data: {
-          html_url: "https://github.com/getsentry/sentry/actions/runs/1234",
-        },
-      }),
-    },
-    issues: {
-      get: jest.fn(),
-      update: jest.fn(),
-      createComment: jest.fn(),
-      removeLabel: jest.fn(),
+    rest: {
+      actions: {
+        getWorkflowRun: async () => ({
+          data: {
+            html_url: "https://github.com/getsentry/sentry/actions/runs/1234",
+          },
+        }),
+      },
+      issues: {
+        get: jest.fn(),
+        update: jest.fn(),
+        createComment: jest.fn(),
+        removeLabel: jest.fn(),
+      },
     },
   },
   Sentry: {
@@ -62,7 +64,7 @@ beforeAll(() => {
     JSON.stringify({ published: { lol: true, hey: false, github: true } })
   );
 
-  failArgs.github.issues.get.mockReturnValue({
+  failArgs.github.rest.issues.get.mockReturnValue({
     data: {
       body: `
 Requested by: @BYK
@@ -95,7 +97,7 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
   });
 
   test("create comment", async () => {
-    const createComment = failArgs.github.issues.createComment;
+    const createComment = failArgs.github.rest.issues.createComment;
     expect(createComment).toHaveBeenCalledTimes(1);
     expect(createComment).toHaveBeenCalledWith({
       owner: "getsentry",
@@ -107,7 +109,7 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
   });
 
   test("remove label", async () => {
-    const removeLabel = failArgs.github.issues.removeLabel;
+    const removeLabel = failArgs.github.rest.issues.removeLabel;
     expect(removeLabel).toHaveBeenCalledTimes(1);
     expect(removeLabel).toHaveBeenCalledWith({
       owner: "getsentry",
@@ -119,8 +121,9 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
 
   if (stateFileExists) {
     test("restore publish state", async () => {
-      expect(failArgs.github.issues.get).toHaveBeenCalledTimes(1);
-      expect(failArgs.github.issues.get.mock.calls[0]).toMatchInlineSnapshot(`
+      expect(failArgs.github.rest.issues.get).toHaveBeenCalledTimes(1);
+      expect(failArgs.github.rest.issues.get.mock.calls[0])
+        .toMatchInlineSnapshot(`
         Array [
           Object {
             "issue_number": "211",
@@ -130,8 +133,8 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
         ]
       `);
 
-      expect(failArgs.github.issues.update).toHaveBeenCalledTimes(1);
-      expect(failArgs.github.issues.update.mock.calls[0])
+      expect(failArgs.github.rest.issues.update).toHaveBeenCalledTimes(1);
+      expect(failArgs.github.rest.issues.update.mock.calls[0])
         .toMatchInlineSnapshot(`
         Array [
           Object {
@@ -161,7 +164,7 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
     });
   } else {
     test("don't modify issue body", () => {
-      expect(failArgs.github.issues.update).not.toHaveBeenCalled();
+      expect(failArgs.github.rest.issues.update).not.toHaveBeenCalled();
     });
   }
 });

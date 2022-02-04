@@ -7,11 +7,21 @@ jobs:
     runs-on: ubuntu-latest
     name: "Publish a new version"
     if: github.event.label.name == 'accepted' && github.event.issue.state == 'open'
+    env:
+      SENTRY_DSN: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838"
     steps:
       - name: "Get repo contents"
         uses: actions/checkout@v2
         with:
           path: ".__publish__"
+
+      - name: "Install Sentry SDK"
+        - uses: actions/setup-node@v2
+          with:
+            node-version: 14
+            cache: npm
+        - run: npm install @sentry/node
+
       - name: "Parse and set inputs"
         id: inputs
         uses: actions/github-script@v3
@@ -27,9 +37,8 @@ jobs:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
-            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
             const start = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/start.js`).default;
-            return await start({context, github, inputs});
+            return await start({context, github});
 
       - uses: actions/checkout@v2
         name: Check out target repo
@@ -87,9 +96,10 @@ jobs:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
+            const Sentry = require('@sentry/node');
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
             const fail = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/fail.js`).default;
-            return await fail({context, github, inputs});
+            return await fail({context, github, inputs, Sentry});
 
       - name: Close on success
         if: ${{ success() }}
@@ -98,6 +108,7 @@ jobs:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
+            const Sentry = require('@sentry/node');
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
             const success = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/success.js`).default;
-            return await success({context, github, inputs});
+            return await success({context, github, inputs, Sentry});

@@ -20,8 +20,5 @@
   },
   "resolutions": {
     "set-value": ">=4.0.1"
-  },
-  "dependencies": {
-    "@sentry/node": "^6.17.4"
   }
 }

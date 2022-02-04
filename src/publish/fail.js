@@ -5,7 +5,7 @@ exports.default = async function fail({ context, github, inputs, Sentry }) {
 
   const repoInfo = context.repo;
   const workflowInfo = (
-    await github.actions.getWorkflowRun({
+    await github.rest.actions.getWorkflowRun({
       ...repoInfo,
       run_id: context.runId,
     })
@@ -15,7 +15,7 @@ exports.default = async function fail({ context, github, inputs, Sentry }) {
   const CRAFT_STATE_FILE_PATH = `${process.env.GITHUB_WORKSPACE}/__repo__/.craft-publish-${version}.json`;
   let updateIssueBodyRequest;
   if (fs.existsSync(CRAFT_STATE_FILE_PATH)) {
-    const issueRequest = github.issues.get({
+    const issueRequest = github.rest.issues.get({
       ...repoInfo,
       issue_number,
     });
@@ -57,7 +57,7 @@ exports.default = async function fail({ context, github, inputs, Sentry }) {
       return targetsText;
     });
 
-    updateIssueBodyRequest = github.issues.update({
+    updateIssueBodyRequest = github.rest.issues.update({
       ...repoInfo,
       issue_number,
       body: newIssueBody,
@@ -68,7 +68,7 @@ exports.default = async function fail({ context, github, inputs, Sentry }) {
 
   await Promise.all([
     updateIssueBodyRequest,
-    github.issues.createComment({
+    github.rest.issues.createComment({
       ...repoInfo,
       issue_number,
       body: `Failed to publish. ([error logs](${
@@ -77,7 +77,7 @@ exports.default = async function fail({ context, github, inputs, Sentry }) {
         version
       )}) and start over._`,
     }),
-    github.issues.removeLabel({
+    github.rest.issues.removeLabel({
       ...repoInfo,
       issue_number,
       name: "accepted",

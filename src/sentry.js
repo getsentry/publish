@@ -2,7 +2,7 @@ const Sentry = require("@sentry/node");
 
 function initSentry({ inputs }) {
   const config = {
-    dsn: "TBD",
+    dsn: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838",
     release: `${inputs.repo}@${inputs.version}`,
     tracesSampleRate: 1.0,
     autoSessionTracking: false,

@@ -6,11 +6,11 @@ exports.default = async function inputs({ context }) {
     : "";
   const path = "." + (titleMatch.path || "");
 
-  const targetsParser = /^(?!### Targets$\s)(?: *- \[[ x]\] [\w.\[\]-]+$(?:\r?\n)?)+/m;
+  const targetsParser = /^(?!### Targets$\s)(?: *- \[[ x]\] [\w.[\]-]+$(?:\r?\n)?)+/m;
   const targetsMatch = context.payload.issue.body.match(targetsParser);
   let targets;
   if (targetsMatch) {
-    const targetMatcher = /^ *- \[x\] ([\w.\[\]-]+)$(?:\r?\n)?/gim;
+    const targetMatcher = /^ *- \[x\] ([\w.[\]-]+)$(?:\r?\n)?/gim;
     targets = Array.from(targetsMatch[0].matchAll(targetMatcher)).map(
       (x) => x[1]
     );

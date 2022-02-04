@@ -1,4 +1,4 @@
-exports.default = async function success({ context, github, Sentry }) {
+exports.default = async function success({ context, github, inputs, Sentry }) {
   const repoInfo = context.repo;
   const workflowInfo = (
     await github.actions.getWorkflowRun({

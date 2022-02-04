@@ -29,12 +29,12 @@ exports.default = async function fail({ context, github, inputs, Sentry }) {
       craftStateRequest,
     ]);
 
-    const targetsParser = /^(?!### Targets$\s)^(?: *- \[[ x]\] [\w.\[\]-]+[ ]*$(?:\r?\n)?)+/m;
+    const targetsParser = /^(?!### Targets$\s)^(?: *- \[[ x]\] [\w.[\]-]+[ ]*$(?:\r?\n)?)+/m;
     const declaredTargets = new Set();
     let leadingSpaces = " ";
     const newIssueBody = issue.body.replace(targetsParser, (targetsSection) => {
       let targetsText = targetsSection.trimRight();
-      const targetMatcher = /^( *)- \[[ x]\] ([\w.\[\]-]+)$/gim;
+      const targetMatcher = /^( *)- \[[ x]\] ([\w.[\]-]+)$/gim;
       targetsText = targetsText.replace(
         targetMatcher,
         (_match, spaces, target) => {

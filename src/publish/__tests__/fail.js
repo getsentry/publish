@@ -1,3 +1,5 @@
+/* eslint-env jest */
+
 jest.mock("fs");
 
 const fs = require("fs");
@@ -44,13 +46,13 @@ const failArgs = deepFreeze({
   },
   Sentry: {
     Scope: class Scope {
-      setTag() { }
-      setContext() { }
+      setTag() {}
+      setContext() {}
     },
     NodeClient: class NodeClient {
-      captureMessage() { }
-    }
-  }
+      captureMessage() {}
+    },
+  },
 });
 
 beforeAll(() => {

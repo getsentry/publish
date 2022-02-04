@@ -54,6 +54,10 @@ const failArgs = deepFreeze({
     NodeClient: class NodeClient {
       captureMessage() {}
     },
+    getCurrentHub: jest.fn(() => ({
+      startSession: jest.fn(),
+      endSession: jest.fn(),
+    })),
   },
 });
 

@@ -38,4 +38,7 @@ exports.default = async function success({ context, github, inputs, Sentry }) {
     null,
     scope
   );
+
+  const session = Sentry.getCurrentHub().startSession({ status: "ok" });
+  Sentry.getCurrentHub().endSession(session);
 };

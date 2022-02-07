@@ -93,13 +93,12 @@ exports.default = async function fail({ context, github, inputs, Sentry }) {
 
   const client = new Sentry.NodeClient({
     dsn: process.env.SENTRY_DSN,
-    release: `${inputs.repo}@${inputs.version}`,
   });
   client.captureMessage(`Release failed: ${inputs.repo}`, "error", null, scope);
 
   const session = Sentry.getCurrentHub().startSession({
-    release,
-    status: "crashed"
+    release: `${inputs.repo}@${inputs.version}`,
+    status: "crashed",
   });
   client.captureSession(session);
 };

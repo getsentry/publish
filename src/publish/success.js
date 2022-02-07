@@ -28,9 +28,10 @@ exports.default = async function success({ context, github, inputs, Sentry }) {
     inputs,
   });
 
+  const release = `${inputs.repo}@${inputs.version}`;
   const client = new Sentry.NodeClient({
     dsn: process.env.SENTRY_DSN,
-    release: `${inputs.repo}@${inputs.version}`,
+    release,
   });
   client.captureMessage(
     `Release succeeded: ${inputs.repo}`,
@@ -38,4 +39,10 @@ exports.default = async function success({ context, github, inputs, Sentry }) {
     null,
     scope
   );
+
+  const session = Sentry.getCurrentHub().startSession({
+    release,
+    status: "ok",
+  });
+  client.captureSession(session);
 };

@@ -84,23 +84,27 @@ exports.default = async function fail({ context, github, inputs, Sentry }) {
     }),
   ]);
 
-  const scope = new Sentry.Scope();
-  scope.setTag("repository", inputs.repo);
-  scope.setContext("release", {
-    issue_number: context.payload.issue.number,
-    inputs,
-  });
-
   const release = `${inputs.repo}@${inputs.version}`;
   const client = new Sentry.NodeClient({
-    release,
     dsn: process.env.SENTRY_DSN,
+    release,
   });
-  client.captureMessage(`Release failed: ${inputs.repo}`, "error", null, scope);
-
-  const session = Sentry.getCurrentHub().startSession({
+  const session = new Sentry.Session({
     release,
     status: "crashed",
   });
+  const scope = new Sentry.Scope().update({
+    tags: {
+      repository: inputs.repo,
+    },
+    contexts: {
+      release: {
+        issue_number: context.payload.issue.number,
+        inputs,
+      },
+    },
+  });
+
+  client.captureMessage(`Release failed: ${inputs.repo}`, "error", null, scope);
   client.captureSession(session);
 };

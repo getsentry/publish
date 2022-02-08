@@ -48,16 +48,13 @@ const failArgs = deepFreeze({
   },
   Sentry: {
     Scope: class Scope {
-      setTag() {}
-      setContext() {}
+      update() {}
     },
     NodeClient: class NodeClient {
       captureMessage() {}
       captureSession() {}
     },
-    getCurrentHub: jest.fn(() => ({
-      startSession: jest.fn(),
-    })),
+    Session: class Session {},
   },
 });
 

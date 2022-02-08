@@ -21,28 +21,32 @@ exports.default = async function success({ context, github, inputs, Sentry }) {
     }),
   ]);
 
-  const scope = new Sentry.Scope();
-  scope.setTag("repository", inputs.repo);
-  scope.setContext("release", {
-    issue_number: context.payload.issue.number,
-    inputs,
-  });
-
   const release = `${inputs.repo}@${inputs.version}`;
   const client = new Sentry.NodeClient({
     dsn: process.env.SENTRY_DSN,
     release,
   });
+  const session = new Sentry.Session({
+    release,
+    status: "ok",
+  });
+  const scope = new Sentry.Scope().update({
+    tags: {
+      repository: inputs.repo,
+    },
+    contexts: {
+      release: {
+        issue_number: context.payload.issue.number,
+        inputs,
+      },
+    },
+  });
+
   client.captureMessage(
     `Release succeeded: ${inputs.repo}`,
     "info",
     null,
     scope
   );
-
-  const session = Sentry.getCurrentHub().startSession({
-    release,
-    status: "ok",
-  });
   client.captureSession(session);
 };

@@ -93,6 +93,8 @@ jobs:
           NUGET_API_TOKEN: ${{ secrets.NUGET_API_TOKEN }}
           GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
 
       - name: Inform about failure
         if: ${{ failure() }}

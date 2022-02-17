@@ -72,6 +72,7 @@ jobs:
             exec craft publish ${{ fromJSON(steps.inputs.outputs.result).version }};
             "
         env:
+          CRAFT_MERGE_TARGET: ${{ fromJSON(steps.inputs.outputs.result).merge_target }}
           CRAFT_LOG_LEVEL: ${{ secrets.CRAFT_LOG_LEVEL }}
           CRAFT_DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}
           GIT_COMMITTER_NAME: getsentry-bot

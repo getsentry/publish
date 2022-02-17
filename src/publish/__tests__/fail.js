@@ -70,6 +70,8 @@ beforeAll(() => {
       body: `
 Requested by: @BYK
 
+Merge target: (default)
+
 Quick links:
 - [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)
 - [View check runs](https://github.com/getsentry/sentry/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)
@@ -141,6 +143,8 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
           Object {
             "body": "
         Requested by: @BYK
+        
+        Merge target: (default)
 
         Quick links:
         - [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)

@@ -29,6 +29,8 @@ const inputsArgs = deepFreeze({
         body: `
 Requested by: @BYK
 
+Merge target: custom-branch
+
 Quick links:
 - [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)
 - [View check runs](https://github.com/getsentry/sentry/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)
@@ -52,6 +54,51 @@ test("parse inputs", async () => {
   expect(result).toMatchInlineSnapshot(`
     Object {
       "dry_run": "",
+      "merge_target": "custom-branch",
+      "path": ".",
+      "repo": "sentry",
+      "targets": Array [
+        "github",
+        "docker[latest]",
+      ],
+      "version": "21.3.1",
+    }
+  `);
+});
+
+
+const defaultTargetInputsArgs = deepFreeze({
+  context: {
+    repo: { owner: "getsentry", repo: "publish" },
+    payload: {
+      issue: {
+        number: "223",
+        title: "publish: getsentry/sentry@21.3.1",
+        body: `
+Requested by: @BYK
+Merge target: (default)
+Quick links:
+- [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)
+- [View check runs](https://github.com/getsentry/sentry/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)
+Assign the **accepted** label to this issue to approve the release.
+### Targets\r
+ - [x] github\r
+ - [ ] pypi\r
+ - [ ] docker[release]
+ - [x] docker[latest]\r
+`,
+        labels: ["accepted"],
+      },
+    },
+  },
+});
+
+test("Do not extract merge_target value if its a default value", async () => {
+  const result = await inputs(defaultTargetInputsArgs);
+  expect(result).toMatchInlineSnapshot(`
+    Object {
+      "dry_run": "",
+      "merge_target": "",
       "path": ".",
       "repo": "sentry",
       "targets": Array [

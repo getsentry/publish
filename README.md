@@ -72,6 +72,18 @@ Also make sure the [engineering team](https://github.com/orgs/getsentry/teams/en
 1. You need to add `calver: true` under the `with` block of the `Prepare release` step to enable automatic version determination
 1. You also need to add your repository to the list in the [`calver workflow`](https://github.com/getsentry/publish/blob/main/.github/workflows/calver.yml#L9-L13)
 
+## Merge Target
+
+By default, all releases will be merged to the default branch of your repository (usually `master` or `main`). If you want to be able to override this behavior, you need to perform additional steps listed below:
+
+1. Update `.github/workflows/release.yml` by adding code below to `on.workflow_dispatch.inputs` block:
+```yaml
+merge_target:
+  description: Target branch to merge into. Uses the default branch as a fallback (optional)
+  required: false
+```
+1. In the same file, add `merge_target: ${{ github.event.inputs.merge_target }}` under the `with` block of the `Prepare release` step
+
 ## Under the hood
 
 The system uses [Craft](https://github.com/getsentry/craft) under the hood to prepare and publish releases. It uses `GH_SENTRY_BOT_PAT` personal access token, tied to the [getsentry-bot](https://github.com/getsentry-bot) account to perform repository actions automatically. This account is a member of the [release-bot team](https://github.com/orgs/getsentry/teams/release-bot). The reason for using a team is to ease role-based ACLs and making the rotation of the bot account itself if/when needed.

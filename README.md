@@ -77,11 +77,11 @@ Also make sure the [engineering team](https://github.com/orgs/getsentry/teams/en
 By default, all releases will be merged to the default branch of your repository (usually `master` or `main`). If you want to be able to override this behavior, you need to perform additional steps listed below:
 
 1. Update `.github/workflows/release.yml` by adding code below to `on.workflow_dispatch.inputs` block:
-```yaml
-merge_target:
-  description: Target branch to merge into. Uses the default branch as a fallback (optional)
-  required: false
-```
+    ```yaml
+    merge_target:
+      description: Target branch to merge into. Uses the default branch as a fallback (optional)
+      required: false
+    ```
 1. In the same file, add `merge_target: ${{ github.event.inputs.merge_target }}` under the `with` block of the `Prepare release` step
 
 ## Under the hood

@@ -31,7 +31,10 @@ jobs:
       - name: Comment and close
         uses: actions/github-script@v5
         if: ${{ fromJSON(steps.inputs.outputs.result).requester == github.event.sender.login }}
+        env:
+          PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
-            const inputs = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/retract.js`).default;
-            return await inputs({context, github});
+            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
+            const retract = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/retract.js`).default;
+            return await retract({context, github, inputs});

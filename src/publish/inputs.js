@@ -6,14 +6,21 @@ exports.default = async function inputs({ context }) {
     : "";
   const path = "." + (titleMatch.path || "");
 
+  // - May only contain alphanumeric characters and hyphens.
+  // - Cannot have multiple consecutive hyphens.
+  // - Cannot begin or end with a hyphen.
+  // - Maximum 39 characters.
+  const requesterParser = /^Requested by: @(?<requester>[a-zA-Z\d](?:[a-zA-Z\d]|-(?=[a-zA-Z\d])){0,38})$/m;
+  const { requester } = context.payload.issue.body.match(
+    requesterParser
+  ).groups;
+
   // https://docs.github.com/en/get-started/using-git/dealing-with-special-characters-in-branch-and-tag-names#naming-branches-and-tags
   const mergeTargetParser = /^Merge target: (?<merge_target>[\w.\-/]+)$/m;
-  const mergeTargetMatch = context.payload.issue.body.match(
-    mergeTargetParser
-  )
-  let merge_target = '';
+  const mergeTargetMatch = context.payload.issue.body.match(mergeTargetParser);
+  let merge_target = "";
   if (mergeTargetMatch && mergeTargetMatch.groups) {
-    merge_target = mergeTargetMatch.groups.merge_target || ''
+    merge_target = mergeTargetMatch.groups.merge_target || "";
   }
 
   const targetsParser = /^(?!### Targets$\s)(?: *- \[[ x]\] [\w.[\]-]+$(?:\r?\n)?)+/m;
@@ -26,5 +33,12 @@ exports.default = async function inputs({ context }) {
     );
   }
 
-  return { ...titleMatch, merge_target, path, dry_run, targets };
+  return {
+    ...titleMatch,
+    dry_run,
+    merge_target,
+    path,
+    requester,
+    targets,
+  };
 };

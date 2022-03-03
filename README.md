@@ -84,6 +84,11 @@ By default, all releases will be merged to the default branch of your repository
     ```
 1. In the same file, add `merge_target: ${{ github.event.inputs.merge_target }}` under the `with` block of the `Prepare release` step
 
+## Retracting Release Request
+
+To restract a release request, comment `#retract` (as the only comment content) under the request you want to retract.
+The only person that can do retract a release, is the same person that initially requested it and is listed in the request description.
+
 ## Under the hood
 
 The system uses [Craft](https://github.com/getsentry/craft) under the hood to prepare and publish releases. It uses `GH_SENTRY_BOT_PAT` personal access token, tied to the [getsentry-bot](https://github.com/getsentry-bot) account to perform repository actions automatically. This account is a member of the [release-bot team](https://github.com/orgs/getsentry/teams/release-bot). The reason for using a team is to ease role-based ACLs and making the rotation of the bot account itself if/when needed.

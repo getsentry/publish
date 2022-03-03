@@ -1,0 +1,37 @@
+name: Retract Release
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  retract:
+    runs-on: ubuntu-latest
+    name: Retract a release
+    if: ${{ !github.event.issue.pull_request && github.event.comment.body == '#retract' }}
+    steps:
+      - name: Get repo contents
+        uses: actions/checkout@v2
+        with:
+          path: .__publish__
+
+      - name: Setup Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: 14
+          cache: yarn
+          cache-dependency-path: .__publish__/yarn.lock
+
+      - name: Parse and set inputs
+        id: inputs
+        uses: actions/github-script@v5
+        with:
+          script: |
+            const inputs = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/inputs.js`).default;
+            return await inputs({context});
+
+      - name: Comment and close
+        uses: actions/github-script@v5
+        if: ${{ fromJSON(steps.inputs.outputs.result).requester == github.event.sender.login }}
+        with:
+          script: |
+            const inputs = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/retract.js`).default;
+            return await inputs({context, github});

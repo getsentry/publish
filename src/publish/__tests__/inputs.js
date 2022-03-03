@@ -57,6 +57,7 @@ test("parse inputs", async () => {
       "merge_target": "custom-branch",
       "path": ".",
       "repo": "sentry",
+      "requester": "BYK",
       "targets": Array [
         "github",
         "docker[latest]",
@@ -65,7 +66,6 @@ test("parse inputs", async () => {
     }
   `);
 });
-
 
 const defaultTargetInputsArgs = deepFreeze({
   context: {
@@ -101,6 +101,7 @@ test("Do not extract merge_target value if its a default value", async () => {
       "merge_target": "",
       "path": ".",
       "repo": "sentry",
+      "requester": "BYK",
       "targets": Array [
         "github",
         "docker[latest]",

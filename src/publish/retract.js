@@ -10,7 +10,7 @@ exports.default = async function success({ context, github, inputs }) {
         context.payload.sender.login
       }.\nYou may also want to remove your [release branch](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
         version
-      )}.`,
+      )}).`,
     }),
 
     github.rest.issues.update({

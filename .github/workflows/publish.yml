@@ -99,6 +99,18 @@ jobs:
           PUBDEV_ACCESS_TOKEN: ${{ secrets.PUBDEV_ACCESS_TOKEN }}
           PUBDEV_REFRESH_TOKEN: ${{ secrets.PUBDEV_REFRESH_TOKEN }}
 
+      - name: Update completed targets
+        if: ${{ cancelled() || failure() }}
+        uses: actions/github-script@v5
+        env:
+          PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
+        with:
+          script: |
+            const Sentry = require('@sentry/node');
+            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
+            const updateTargets = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/update-targets.js`).default;
+            return await updateTargets({context, github, inputs});
+
       - name: Inform about failure
         if: ${{ failure() }}
         uses: actions/github-script@v5

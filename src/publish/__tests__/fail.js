@@ -88,15 +88,9 @@ Assign the **accepted** label to this issue to approve the release.\r
   });
 });
 
-describe.each([false, true])("state file exists: %s", (stateFileExists) => {
+describe("publish failed", () => {
   beforeEach(async () => {
-    fs.existsSync = jest.fn(() => stateFileExists);
     await fail(failArgs);
-    expect(fs.existsSync).toHaveBeenCalledTimes(1);
-    // This is process.env.GITHUB_WORKSPACE + / filename
-    expect(fs.existsSync).toHaveBeenCalledWith(
-      "./__repo__/.craft-publish-21.3.1.json"
-    );
   });
 
   test("create comment", async () => {
@@ -121,55 +115,4 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
       name: "accepted",
     });
   });
-
-  if (stateFileExists) {
-    test("restore publish state", async () => {
-      expect(failArgs.github.rest.issues.get).toHaveBeenCalledTimes(1);
-      expect(failArgs.github.rest.issues.get.mock.calls[0])
-        .toMatchInlineSnapshot(`
-        Array [
-          Object {
-            "issue_number": "211",
-            "owner": "getsentry",
-            "repo": "publish",
-          },
-        ]
-      `);
-
-      expect(failArgs.github.rest.issues.update).toHaveBeenCalledTimes(1);
-      expect(failArgs.github.rest.issues.update.mock.calls[0])
-        .toMatchInlineSnapshot(`
-        Array [
-          Object {
-            "body": "
-        Requested by: @BYK
-        
-        Merge target: (default)
-
-        Quick links:
-        - [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)
-        - [View check runs](https://github.com/getsentry/sentry/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)
-
-        Assign the **accepted** label to this issue to approve the release.
-        
-        ### Targets
-        - [x] github
-        - [ ] pypi
-        - [ ] docker[release]
-        - [ ] docker[latest]
-        - [x] lol
-        - [ ] hey
-        ",
-            "issue_number": "211",
-            "owner": "getsentry",
-            "repo": "publish",
-          },
-        ]
-      `);
-    });
-  } else {
-    test("don't modify issue body", () => {
-      expect(failArgs.github.rest.issues.update).not.toHaveBeenCalled();
-    });
-  }
 });

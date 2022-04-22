@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-exports.default = async function updateTargets({ context, github, inputs }) {
+exports.default = async function updateIssue({ context, github, inputs }) {
   const { version } = inputs;
 
   const repoInfo = context.repo;
@@ -61,5 +61,12 @@ exports.default = async function updateTargets({ context, github, inputs }) {
     updateIssueBodyRequest = Promise.resolve();
   }
 
-  await updateIssueBodyRequest;
+  await Promise.all([
+    updateIssueBodyRequest,
+    github.rest.issues.removeLabel({
+      ...repoInfo,
+      issue_number,
+      name: "accepted",
+    }),
+  ]);
 };

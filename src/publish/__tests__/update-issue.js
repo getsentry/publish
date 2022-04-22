@@ -3,7 +3,7 @@
 jest.mock("fs");
 
 const fs = require("fs");
-const updateTargets = require("../update-targets.js").default;
+const updateTargets = require("../update-issue.js").default;
 
 function deepFreeze(object) {
   // Retrieve the property names defined on object
@@ -153,4 +153,15 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
       ).not.toHaveBeenCalled();
     });
   }
+
+  test("remove label", async () => {
+    const removeLabel = updateTargetsArgs.github.rest.issues.removeLabel;
+    expect(removeLabel).toHaveBeenCalledTimes(1);
+    expect(removeLabel).toHaveBeenCalledWith({
+      owner: "getsentry",
+      repo: "publish",
+      issue_number: "211",
+      name: "accepted",
+    });
+  });
 });

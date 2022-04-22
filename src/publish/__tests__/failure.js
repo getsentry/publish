@@ -104,15 +104,4 @@ describe("publish failed", () => {
         "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
     });
   });
-
-  test("remove label", async () => {
-    const removeLabel = failureArgs.github.rest.issues.removeLabel;
-    expect(removeLabel).toHaveBeenCalledTimes(1);
-    expect(removeLabel).toHaveBeenCalledWith({
-      owner: "getsentry",
-      repo: "publish",
-      issue_number: "211",
-      name: "accepted",
-    });
-  });
 });

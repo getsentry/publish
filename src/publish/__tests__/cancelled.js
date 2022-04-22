@@ -2,25 +2,8 @@
 
 jest.mock("fs");
 
-const fs = require("fs");
 const cancelled = require("../cancelled.js").default;
-
-function deepFreeze(object) {
-  // Retrieve the property names defined on object
-  const propNames = Object.getOwnPropertyNames(object);
-
-  // Freeze properties before freezing self
-
-  for (const name of propNames) {
-    const value = object[name];
-
-    if (value && typeof value === "object") {
-      deepFreeze(value);
-    }
-  }
-
-  return Object.freeze(object);
-}
+const deepFreeze = require("../deep-freeze.js").default;
 
 const cancelledArgs = deepFreeze({
   inputs: { repo: "sentry", version: "21.3.1" },
@@ -39,10 +22,7 @@ const cancelledArgs = deepFreeze({
         }),
       },
       issues: {
-        get: jest.fn(),
-        update: jest.fn(),
         createComment: jest.fn(),
-        removeLabel: jest.fn(),
       },
     },
   },
@@ -56,36 +36,6 @@ const cancelledArgs = deepFreeze({
     },
     Session: class Session {},
   },
-});
-
-beforeAll(() => {
-  process.env.GITHUB_WORKSPACE = ".";
-  fs.promises = {};
-  fs.promises.readFile = jest.fn(async () =>
-    JSON.stringify({ published: { lol: true, hey: false, github: true } })
-  );
-
-  cancelledArgs.github.rest.issues.get.mockReturnValue({
-    data: {
-      body: `
-Requested by: @BYK
-
-Merge target: (default)
-
-Quick links:
-- [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)
-- [View check runs](https://github.com/getsentry/sentry/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)
-
-Assign the **accepted** label to this issue to approve the release.\r
-
-### Targets\r
-- [ ] github
-- [ ] pypi\r
-- [ ] docker[release]\r
-- [ ] docker[latest]  
-`,
-    },
-  });
 });
 
 describe("publish cancelleded", () => {

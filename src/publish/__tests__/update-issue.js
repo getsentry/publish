@@ -4,23 +4,7 @@ jest.mock("fs");
 
 const fs = require("fs");
 const updateTargets = require("../update-issue.js").default;
-
-function deepFreeze(object) {
-  // Retrieve the property names defined on object
-  const propNames = Object.getOwnPropertyNames(object);
-
-  // Freeze properties before freezing self
-
-  for (const name of propNames) {
-    const value = object[name];
-
-    if (value && typeof value === "object") {
-      deepFreeze(value);
-    }
-  }
-
-  return Object.freeze(object);
-}
+const deepFreeze = require("../deep-freeze.js").default;
 
 const updateTargetsArgs = deepFreeze({
   inputs: { repo: "sentry", version: "21.3.1" },
@@ -41,7 +25,6 @@ const updateTargetsArgs = deepFreeze({
       issues: {
         get: jest.fn(),
         update: jest.fn(),
-        createComment: jest.fn(),
         removeLabel: jest.fn(),
       },
     },

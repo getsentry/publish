@@ -1,4 +1,4 @@
-exports.default = async function fail({ context, github, inputs, Sentry }) {
+exports.default = async function failure({ context, github, inputs, Sentry }) {
   const { repo, version } = inputs;
 
   const repoInfo = context.repo;

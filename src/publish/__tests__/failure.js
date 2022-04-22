@@ -3,7 +3,7 @@
 jest.mock("fs");
 
 const fs = require("fs");
-const fail = require("../fail.js").default;
+const failure = require("../failure.js").default;
 
 function deepFreeze(object) {
   // Retrieve the property names defined on object
@@ -22,7 +22,7 @@ function deepFreeze(object) {
   return Object.freeze(object);
 }
 
-const failArgs = deepFreeze({
+const failureArgs = deepFreeze({
   inputs: { repo: "sentry", version: "21.3.1" },
   context: {
     runId: "1234",
@@ -65,7 +65,7 @@ beforeAll(() => {
     JSON.stringify({ published: { lol: true, hey: false, github: true } })
   );
 
-  failArgs.github.rest.issues.get.mockReturnValue({
+  failureArgs.github.rest.issues.get.mockReturnValue({
     data: {
       body: `
 Requested by: @BYK
@@ -90,23 +90,23 @@ Assign the **accepted** label to this issue to approve the release.\r
 
 describe("publish failed", () => {
   beforeEach(async () => {
-    await fail(failArgs);
+    await failure(failureArgs);
   });
 
   test("create comment", async () => {
-    const createComment = failArgs.github.rest.issues.createComment;
+    const createComment = failureArgs.github.rest.issues.createComment;
     expect(createComment).toHaveBeenCalledTimes(1);
     expect(createComment).toHaveBeenCalledWith({
       owner: "getsentry",
       repo: "publish",
       issue_number: "211",
       body:
-        "Failed to publish. ([error logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
+        "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
     });
   });
 
   test("remove label", async () => {
-    const removeLabel = failArgs.github.rest.issues.removeLabel;
+    const removeLabel = failureArgs.github.rest.issues.removeLabel;
     expect(removeLabel).toHaveBeenCalledTimes(1);
     expect(removeLabel).toHaveBeenCalledWith({
       owner: "getsentry",

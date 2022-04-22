@@ -121,8 +121,8 @@ jobs:
           script: |
             const Sentry = require('@sentry/node');
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const fail = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/fail.js`).default;
-            return await fail({context, github, inputs, Sentry});
+            const failure = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/failure.js`).default;
+            return await failure({context, github, inputs, Sentry});
 
       - name: Close on success
         if: ${{ success() }}

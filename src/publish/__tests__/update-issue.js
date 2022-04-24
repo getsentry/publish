@@ -4,9 +4,8 @@ jest.mock("fs");
 
 const fs = require("fs");
 const updateTargets = require("../update-issue.js").default;
-const deepFreeze = require("../deep-freeze.js").default;
 
-const updateTargetsArgs = deepFreeze({
+const updateTargetsArgs = {
   inputs: { repo: "sentry", version: "21.3.1" },
   context: {
     runId: "1234",
@@ -39,7 +38,7 @@ const updateTargetsArgs = deepFreeze({
     },
     Session: class Session {},
   },
-});
+};
 
 beforeAll(() => {
   process.env.GITHUB_WORKSPACE = ".";

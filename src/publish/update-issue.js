@@ -3,15 +3,15 @@ const fs = require("fs");
 exports.default = async function updateIssue({ context, github, inputs }) {
   const { version } = inputs;
 
-  const repoInfo = context.repo;
-  const issue_number = context.payload.issue.number;
+  const { repo: publishRepo } = context;
+  const { number: issue_number } = context.payload.issue;
 
   const CRAFT_STATE_FILE_PATH = `${process.env.GITHUB_WORKSPACE}/__repo__/.craft-publish-${version}.json`;
   let updateIssueBodyRequest;
 
   if (fs.existsSync(CRAFT_STATE_FILE_PATH)) {
     const issueRequest = github.rest.issues.get({
-      ...repoInfo,
+      ...publishRepo,
       issue_number,
     });
 
@@ -53,7 +53,7 @@ exports.default = async function updateIssue({ context, github, inputs }) {
     });
 
     updateIssueBodyRequest = github.rest.issues.update({
-      ...repoInfo,
+      ...publishRepo,
       issue_number,
       body: newIssueBody,
     });
@@ -64,7 +64,7 @@ exports.default = async function updateIssue({ context, github, inputs }) {
   await Promise.all([
     updateIssueBodyRequest,
     github.rest.issues.removeLabel({
-      ...repoInfo,
+      ...publishRepo,
       issue_number,
       name: "accepted",
     }),

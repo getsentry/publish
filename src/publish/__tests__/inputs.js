@@ -1,9 +1,8 @@
 /* eslint-env jest */
 
 const inputs = require("../inputs.js").default;
-const deepFreeze = require("../deep-freeze.js").default;
 
-const inputsArgs = deepFreeze({
+const inputsArgs = {
   context: {
     repo: { owner: "getsentry", repo: "publish" },
     payload: {
@@ -31,7 +30,7 @@ Assign the **accepted** label to this issue to approve the release.
       },
     },
   },
-});
+};
 
 test("parse inputs", async () => {
   const result = await inputs(inputsArgs);
@@ -51,7 +50,7 @@ test("parse inputs", async () => {
   `);
 });
 
-const defaultTargetInputsArgs = deepFreeze({
+const defaultTargetInputsArgs = {
   context: {
     repo: { owner: "getsentry", repo: "publish" },
     payload: {
@@ -75,7 +74,7 @@ Assign the **accepted** label to this issue to approve the release.
       },
     },
   },
-});
+};
 
 test("Do not extract merge_target value if its a default value", async () => {
   const result = await inputs(defaultTargetInputsArgs);

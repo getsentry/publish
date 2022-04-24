@@ -1,27 +1,30 @@
 exports.default = async function success({ context, github, inputs, Sentry }) {
-  const repoInfo = context.repo;
+  const { repo, version } = inputs;
+  const { repo: publishRepo, runId: run_id } = context;
+  const { number: issue_number } = context.payload.issue;
+
   const workflowInfo = (
     await github.rest.actions.getWorkflowRun({
-      ...repoInfo,
-      run_id: context.runId,
+      ...publishRepo,
+      run_id,
     })
   ).data;
 
   await Promise.all([
     github.rest.issues.createComment({
-      ...repoInfo,
-      issue_number: context.payload.issue.number,
-      body: `Published successfully: [run#${context.runId}](${workflowInfo.html_url})`,
+      ...publishRepo,
+      issue_number,
+      body: `Published successfully: [run#${run_id}](${workflowInfo.html_url})`,
     }),
 
     github.rest.issues.update({
-      ...repoInfo,
-      issue_number: context.payload.issue.number,
+      ...publishRepo,
+      issue_number,
       state: "closed",
     }),
   ]);
 
-  const release = `${inputs.repo}@${inputs.version}`;
+  const release = `${repo}@${version}`;
   const client = new Sentry.NodeClient({
     dsn: process.env.SENTRY_DSN,
     release,
@@ -32,21 +35,16 @@ exports.default = async function success({ context, github, inputs, Sentry }) {
   });
   const scope = new Sentry.Scope().update({
     tags: {
-      repository: inputs.repo,
+      repository: repo,
     },
     contexts: {
       release: {
-        issue_number: context.payload.issue.number,
+        issue_number,
         inputs,
       },
     },
   });
 
-  client.captureMessage(
-    `Release succeeded: ${inputs.repo}`,
-    "info",
-    null,
-    scope
-  );
+  client.captureMessage(`Release succeeded: ${repo}`, "info", null, scope);
   client.captureSession(session);
 };

@@ -5,18 +5,18 @@ exports.default = async function cancelled({
   Sentry,
 }) {
   const { repo, version } = inputs;
+  const { repo: publishRepo, runId: run_id } = context;
+  const { number: issue_number } = context.payload.issue;
 
-  const repoInfo = context.repo;
   const workflowInfo = (
     await github.rest.actions.getWorkflowRun({
-      ...repoInfo,
-      run_id: context.runId,
+      ...publishRepo,
+      run_id,
     })
   ).data;
-  const issue_number = context.payload.issue.number;
 
   await github.rest.issues.createComment({
-    ...repoInfo,
+    ...publishRepo,
     issue_number,
     body: `Publish workflow cancelled. ([run logs](${
       workflowInfo.html_url
@@ -25,7 +25,7 @@ exports.default = async function cancelled({
     )}) and start over._`,
   });
 
-  const release = `${inputs.repo}@${inputs.version}`;
+  const release = `${repo}@${version}`;
   const client = new Sentry.NodeClient({
     dsn: process.env.SENTRY_DSN,
     release,
@@ -36,21 +36,16 @@ exports.default = async function cancelled({
   });
   const scope = new Sentry.Scope().update({
     tags: {
-      repository: inputs.repo,
+      repository: repo,
     },
     contexts: {
       release: {
-        issue_number: context.payload.issue.number,
+        issue_number,
         inputs,
       },
     },
   });
 
-  client.captureMessage(
-    `Release cancelled: ${inputs.repo}`,
-    "warn",
-    null,
-    scope
-  );
+  client.captureMessage(`Release cancelled: ${repo}`, "warn", null, scope);
   client.captureSession(session);
 };

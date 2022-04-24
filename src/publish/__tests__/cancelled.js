@@ -3,9 +3,8 @@
 jest.mock("fs");
 
 const cancelled = require("../cancelled.js").default;
-const deepFreeze = require("../deep-freeze.js").default;
 
-const cancelledArgs = deepFreeze({
+const cancelledArgs = {
   inputs: { repo: "sentry", version: "21.3.1" },
   context: {
     runId: "1234",
@@ -36,7 +35,7 @@ const cancelledArgs = deepFreeze({
     },
     Session: class Session {},
   },
-});
+};
 
 describe("publish cancelleded", () => {
   beforeEach(async () => {
@@ -46,12 +45,15 @@ describe("publish cancelleded", () => {
   test("create comment", async () => {
     const createComment = cancelledArgs.github.rest.issues.createComment;
     expect(createComment).toHaveBeenCalledTimes(1);
-    expect(createComment).toHaveBeenCalledWith({
-      owner: "getsentry",
-      repo: "publish",
-      issue_number: "211",
-      body:
-        "Publish workflow cancelled. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
-    });
+    expect(createComment.mock.calls[0][0]).toMatchInlineSnapshot(`
+      Object {
+        "body": "Publish workflow cancelled. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
+
+      _Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
+        "issue_number": "211",
+        "owner": "getsentry",
+        "repo": "publish",
+      }
+    `);
   });
 });

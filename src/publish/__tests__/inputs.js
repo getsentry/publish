@@ -2,24 +2,7 @@
 
 const inputs = require("../inputs.js").default;
 
-function deepFreeze(object) {
-  // Retrieve the property names defined on object
-  const propNames = Object.getOwnPropertyNames(object);
-
-  // Freeze properties before freezing self
-
-  for (const name of propNames) {
-    const value = object[name];
-
-    if (value && typeof value === "object") {
-      deepFreeze(value);
-    }
-  }
-
-  return Object.freeze(object);
-}
-
-const inputsArgs = deepFreeze({
+const inputsArgs = {
   context: {
     repo: { owner: "getsentry", repo: "publish" },
     payload: {
@@ -47,7 +30,7 @@ Assign the **accepted** label to this issue to approve the release.
       },
     },
   },
-});
+};
 
 test("parse inputs", async () => {
   const result = await inputs(inputsArgs);
@@ -67,7 +50,7 @@ test("parse inputs", async () => {
   `);
 });
 
-const defaultTargetInputsArgs = deepFreeze({
+const defaultTargetInputsArgs = {
   context: {
     repo: { owner: "getsentry", repo: "publish" },
     payload: {
@@ -91,7 +74,7 @@ Assign the **accepted** label to this issue to approve the release.
       },
     },
   },
-});
+};
 
 test("Do not extract merge_target value if its a default value", async () => {
   const result = await inputs(defaultTargetInputsArgs);

@@ -1,15 +1,17 @@
 exports.default = async function start({ context, github }) {
-  const repoInfo = context.repo;
+  const { repo: publishRepo, runId: run_id } = context;
+  const { number: issue_number } = context.payload.issue;
+
   const workflowInfo = (
     await github.rest.actions.getWorkflowRun({
-      ...repoInfo,
-      run_id: context.runId,
+      ...publishRepo,
+      run_id,
     })
   ).data;
 
   return github.rest.issues.createComment({
-    ...repoInfo,
-    issue_number: context.payload.issue.number,
-    body: `Publishing: [run#${context.runId}](${workflowInfo.html_url})`,
+    ...publishRepo,
+    issue_number,
+    body: `Publishing: [run#${run_id}](${workflowInfo.html_url})`,
   });
 };

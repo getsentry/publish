@@ -100,7 +100,7 @@ jobs:
           PUBDEV_ACCESS_TOKEN: ${{ secrets.PUBDEV_ACCESS_TOKEN }}
           PUBDEV_REFRESH_TOKEN: ${{ secrets.PUBDEV_REFRESH_TOKEN }}
 
-      - name: Update completed targets
+      - name: Update completed targets and remove label
         if: ${{ cancelled() || failure() }}
         uses: actions/github-script@v5
         env:
@@ -109,8 +109,20 @@ jobs:
           script: |
             const Sentry = require('@sentry/node');
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const updateTargets = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/update-targets.js`).default;
-            return await updateTargets({context, github, inputs});
+            const updateIssue = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/update-issue.js`).default;
+            return await updateIssue({context, github, inputs});
+
+      - name: Inform about cancellation
+        if: ${{ cancelled() }}
+        uses: actions/github-script@v5
+        env:
+          PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
+        with:
+          script: |
+            const Sentry = require('@sentry/node');
+            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
+            const cancelled = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/cancelled.js`).default;
+            return await cancelled({context, github, inputs, Sentry});
 
       - name: Inform about failure
         if: ${{ failure() }}
@@ -121,8 +133,8 @@ jobs:
           script: |
             const Sentry = require('@sentry/node');
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const fail = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/fail.js`).default;
-            return await fail({context, github, inputs, Sentry});
+            const failure = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/failure.js`).default;
+            return await failure({context, github, inputs, Sentry});
 
       - name: Close on success
         if: ${{ success() }}

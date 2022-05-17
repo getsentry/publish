@@ -6,7 +6,14 @@ jobs:
   retract:
     runs-on: ubuntu-latest
     name: Retract a release
-    if: ${{ !github.event.issue.pull_request && github.event.comment.body == '#retract' }}
+    # not a pull request and has `#contains` on a line by itself
+    # fromJSON is used to process escape sequences
+    if: |
+      !github.event.issue.pull_request &&
+      contains(
+        format(fromJSON('"\r\n{0}\r\n"'), github.event.comment.body),
+        fromJSON('"\r\n#retract\r\n"')
+      )
     steps:
       - name: Get repo contents
         uses: actions/checkout@v2

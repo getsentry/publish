@@ -24,7 +24,7 @@ jobs:
           cache-dependency-path: .__publish__/yarn.lock
 
       - name: Install Sentry SDK
-        run: yarn add @sentry/node
+        run: yarn add @sentry/node@6
 
       - name: Parse and set inputs
         id: inputs

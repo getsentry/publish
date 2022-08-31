@@ -9,7 +9,7 @@ jobs:
     if: github.event.label.name == 'accepted' && github.event.issue.state == 'open'
     timeout-minutes: 60
     env:
-      SENTRY_DSN: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838"
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
     steps:
       - name: Get repo contents
         uses: actions/checkout@v2
@@ -23,26 +23,18 @@ jobs:
           cache: yarn
           cache-dependency-path: .__publish__/yarn.lock
 
-      - name: Install Sentry SDK
-        run: yarn add @sentry/node@6
+      - name: Install Deps
+        run: yarn install --cwd ".__publish__"
 
       - name: Parse and set inputs
         id: inputs
-        uses: actions/github-script@v5
-        with:
-          script: |
-            const inputs = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/inputs.js`).default;
-            return await inputs({context});
+        run: node .__publish__/src/publish/inputs.js
 
       - name: Inform start
         if: steps.inputs.outcome == 'success'
-        uses: actions/github-script@v5
         env:
-          PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const start = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/start.js`).default;
-            return await start({context, github});
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .__publish__/src/publish/start.js
 
       - uses: actions/checkout@v2
         name: Check out target repo
@@ -102,48 +94,28 @@ jobs:
 
       - name: Update completed targets and remove label
         if: ${{ cancelled() || failure() }}
-        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const Sentry = require('@sentry/node');
-            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const updateIssue = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/update-issue.js`).default;
-            return await updateIssue({context, github, inputs});
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .__publish__/src/publish/update-issue.js
 
       - name: Inform about cancellation
         if: ${{ cancelled() }}
-        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const Sentry = require('@sentry/node');
-            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const cancelled = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/cancelled.js`).default;
-            return await cancelled({context, github, inputs, Sentry});
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .__publish__/src/publish/cancelled.js
 
       - name: Inform about failure
         if: ${{ failure() }}
-        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const Sentry = require('@sentry/node');
-            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const failure = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/failure.js`).default;
-            return await failure({context, github, inputs, Sentry});
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .__publish__/src/publish/failure.js
 
       - name: Close on success
         if: ${{ success() }}
-        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const Sentry = require('@sentry/node');
-            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const success = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/success.js`).default;
-            return await success({context, github, inputs, Sentry});
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .__publish__/src/publish/success.js

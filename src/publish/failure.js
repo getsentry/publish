@@ -1,16 +1,24 @@
-exports.default = async function failure({ context, github, inputs, Sentry }) {
+const Sentry = require('@sentry/node');
+const SentryHub = require('@sentry/hub');
+const github = require('@actions/github');
+
+async function failure() {
+  const context = github.context;
+  const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
+  const inputs = JSON.parse(process.env.PUBLISH_ARGS);
+
   const { repo, version } = inputs;
   const { repo: publishRepo, runId: run_id } = context;
   const { number: issue_number } = context.payload.issue;
 
   const workflowInfo = (
-    await github.rest.actions.getWorkflowRun({
+    await octokit.rest.actions.getWorkflowRun({
       ...publishRepo,
       run_id,
     })
   ).data;
 
-  await github.rest.issues.createComment({
+  await octokit.rest.issues.createComment({
     ...publishRepo,
     issue_number,
     body: `Failed to publish. ([run logs](${
@@ -23,12 +31,13 @@ exports.default = async function failure({ context, github, inputs, Sentry }) {
   const release = `${repo}@${version}`;
   const client = new Sentry.NodeClient({
     dsn: process.env.SENTRY_DSN,
+    transport: Sentry.makeNodeTransport,
     release,
   });
-  const session = new Sentry.Session({
+  const session = SentryHub.makeSession({
     release,
-    status: "crashed",
   });
+  SentryHub.updateSession(session, {status: 'crashed'});
   const scope = new Sentry.Scope().update({
     tags: {
       repository: repo,
@@ -44,3 +53,5 @@ exports.default = async function failure({ context, github, inputs, Sentry }) {
   client.captureMessage(`Release failed: ${repo}`, "error", null, scope);
   client.captureSession(session);
 };
+
+failure();

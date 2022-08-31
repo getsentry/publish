@@ -1,7 +1,9 @@
 const fs = require("fs");
 
-exports.default = async function updateIssue({ context, github, inputs }) {
-  const { version } = inputs;
+async function updateIssue() {
+  const context = github.context;
+  const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
+  const { version } = JSON.parse(process.env.PUBLISH_ARGS);
 
   const { repo: publishRepo } = context;
   const { number: issue_number } = context.payload.issue;
@@ -10,7 +12,7 @@ exports.default = async function updateIssue({ context, github, inputs }) {
   let updateIssueBodyRequest;
 
   if (fs.existsSync(CRAFT_STATE_FILE_PATH)) {
-    const issueRequest = github.rest.issues.get({
+    const issueRequest = octokit.rest.issues.get({
       ...publishRepo,
       issue_number,
     });
@@ -52,7 +54,7 @@ exports.default = async function updateIssue({ context, github, inputs }) {
       return targetsText;
     });
 
-    updateIssueBodyRequest = github.rest.issues.update({
+    updateIssueBodyRequest = octokit.rest.issues.update({
       ...publishRepo,
       issue_number,
       body: newIssueBody,
@@ -63,10 +65,11 @@ exports.default = async function updateIssue({ context, github, inputs }) {
 
   await Promise.all([
     updateIssueBodyRequest,
-    github.rest.issues.removeLabel({
+    octokit.rest.issues.removeLabel({
       ...publishRepo,
       issue_number,
       name: "accepted",
     }),
   ]);
-};
+}
+updateIssue();

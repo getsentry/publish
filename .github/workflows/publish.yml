@@ -107,7 +107,6 @@ jobs:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
-            const Sentry = require('@sentry/node');
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
             const updateIssue = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/update-issue.js`).default;
             return await updateIssue({context, github, inputs});

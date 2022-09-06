@@ -36,13 +36,9 @@ jobs:
 
       - name: Inform start
         if: steps.inputs.outcome == 'success'
-        uses: actions/github-script@v5
         env:
-          PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const start = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/start.js`).default;
-            return await start({context, github});
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .__publish__/src/publish/post-workflow-details.js
 
       - uses: actions/checkout@v2
         name: Check out target repo

@@ -102,14 +102,10 @@ jobs:
 
       - name: Update completed targets and remove label
         if: ${{ cancelled() || failure() }}
-        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const updateIssue = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/update-issue.js`).default;
-            return await updateIssue({context, github, inputs});
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .__publish__/src/publish/update-issue.js
 
       - name: Inform about cancellation
         if: ${{ cancelled() }}

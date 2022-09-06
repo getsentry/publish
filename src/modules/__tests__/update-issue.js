@@ -3,7 +3,7 @@
 jest.mock("fs");
 
 const fs = require("fs");
-const updateTargets = require("../update-issue.js").default;
+const updateIssue = require("../update-issue.js");
 
 const updateTargetsArgs = {
   inputs: { repo: "sentry", version: "21.3.1" },
@@ -12,7 +12,7 @@ const updateTargetsArgs = {
     repo: { owner: "getsentry", repo: "publish" },
     payload: { issue: { number: "211" } },
   },
-  github: {
+  octokit: {
     rest: {
       actions: {
         getWorkflowRun: async () => ({
@@ -47,7 +47,7 @@ beforeAll(() => {
     JSON.stringify({ published: { lol: true, hey: false, github: true } })
   );
 
-  updateTargetsArgs.github.rest.issues.get.mockReturnValue({
+  updateTargetsArgs.octokit.rest.issues.get.mockReturnValue({
     data: {
       body: `
 Requested by: @BYK
@@ -64,7 +64,7 @@ Assign the **accepted** label to this issue to approve the release.\r
 - [ ] github
 - [ ] pypi\r
 - [ ] docker[release]\r
-- [ ] docker[latest]  
+- [ ] docker[latest]
 `,
     },
   });
@@ -73,7 +73,7 @@ Assign the **accepted** label to this issue to approve the release.\r
 describe.each([false, true])("state file exists: %s", (stateFileExists) => {
   beforeEach(async () => {
     fs.existsSync = jest.fn(() => stateFileExists);
-    await updateTargets(updateTargetsArgs);
+    await updateIssue(updateTargetsArgs);
     expect(fs.existsSync).toHaveBeenCalledTimes(1);
     // This is process.env.GITHUB_WORKSPACE + / filename
     expect(fs.existsSync).toHaveBeenCalledWith(
@@ -83,8 +83,8 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
 
   if (stateFileExists) {
     test("restore publish state", async () => {
-      expect(updateTargetsArgs.github.rest.issues.get).toHaveBeenCalledTimes(1);
-      expect(updateTargetsArgs.github.rest.issues.get.mock.calls[0])
+      expect(updateTargetsArgs.octokit.rest.issues.get).toHaveBeenCalledTimes(1);
+      expect(updateTargetsArgs.octokit.rest.issues.get.mock.calls[0])
         .toMatchInlineSnapshot(`
         Array [
           Object {
@@ -95,16 +95,16 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
         ]
       `);
 
-      expect(updateTargetsArgs.github.rest.issues.update).toHaveBeenCalledTimes(
+      expect(updateTargetsArgs.octokit.rest.issues.update).toHaveBeenCalledTimes(
         1
       );
-      expect(updateTargetsArgs.github.rest.issues.update.mock.calls[0])
+      expect(updateTargetsArgs.octokit.rest.issues.update.mock.calls[0])
         .toMatchInlineSnapshot(`
         Array [
           Object {
             "body": "
         Requested by: @BYK
-        
+
         Merge target: (default)
 
         Quick links:
@@ -112,7 +112,7 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
         - [View check runs](https://github.com/getsentry/sentry/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)
 
         Assign the **accepted** label to this issue to approve the release.
-        
+
         ### Targets
         - [x] github
         - [ ] pypi
@@ -131,13 +131,13 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
   } else {
     test("don't modify issue body", () => {
       expect(
-        updateTargetsArgs.github.rest.issues.update
+        updateTargetsArgs.octokit.rest.issues.update
       ).not.toHaveBeenCalled();
     });
   }
 
   test("remove label", async () => {
-    const removeLabel = updateTargetsArgs.github.rest.issues.removeLabel;
+    const removeLabel = updateTargetsArgs.octokit.rest.issues.removeLabel;
     expect(removeLabel).toHaveBeenCalledTimes(1);
     expect(removeLabel).toHaveBeenCalledWith({
       owner: "getsentry",

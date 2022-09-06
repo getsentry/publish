@@ -23,8 +23,8 @@ jobs:
           cache: yarn
           cache-dependency-path: .__publish__/yarn.lock
 
-      - name: Install Sentry SDK
-        run: yarn add @sentry/node@6
+      - name: Install yarn dependencies
+        run: yarn install --cwd ".__publish__"
 
       - name: Parse and set inputs
         id: inputs
@@ -107,43 +107,27 @@ jobs:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         with:
           script: |
-            const Sentry = require('@sentry/node');
             const inputs = JSON.parse(process.env.PUBLISH_ARGS);
             const updateIssue = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/update-issue.js`).default;
             return await updateIssue({context, github, inputs});
 
       - name: Inform about cancellation
         if: ${{ cancelled() }}
-        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const Sentry = require('@sentry/node');
-            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const cancelled = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/cancelled.js`).default;
-            return await cancelled({context, github, inputs, Sentry});
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .__publish__/src/publish/post-result.js cancelled
 
       - name: Inform about failure
         if: ${{ failure() }}
-        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const Sentry = require('@sentry/node');
-            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const failure = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/failure.js`).default;
-            return await failure({context, github, inputs, Sentry});
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .__publish__/src/publish/post-result.js failure
 
       - name: Close on success
         if: ${{ success() }}
-        uses: actions/github-script@v5
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        with:
-          script: |
-            const Sentry = require('@sentry/node');
-            const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-            const success = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/success.js`).default;
-            return await success({context, github, inputs, Sentry});
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .__publish__/src/publish/post-result.js success

@@ -1,6 +1,6 @@
 /* eslint-env jest */
 
-const inputs = require("../inputs.js").default;
+const detailsFromContext = require("../details-from-context.js");
 
 const inputsArgs = {
   context: {
@@ -33,21 +33,19 @@ Assign the **accepted** label to this issue to approve the release.
 };
 
 test("parse inputs", async () => {
-  const result = await inputs(inputsArgs);
-  expect(result).toMatchInlineSnapshot(`
-    Object {
-      "dry_run": "",
-      "merge_target": "custom-branch",
-      "path": ".",
-      "repo": "sentry",
-      "requester": "BYK",
-      "targets": Array [
+  const result = await detailsFromContext(inputsArgs);
+  expect(result).toEqual({
+      dry_run: "",
+      merge_target: "custom-branch",
+      path: ".",
+      repo: "sentry",
+      requester: "BYK",
+      targets: [
         "github",
         "docker[latest]",
       ],
-      "version": "21.3.1",
-    }
-  `);
+      version: "21.3.1",
+    });
 });
 
 const defaultTargetInputsArgs = {
@@ -77,19 +75,22 @@ Assign the **accepted** label to this issue to approve the release.
 };
 
 test("Do not extract merge_target value if its a default value", async () => {
-  const result = await inputs(defaultTargetInputsArgs);
-  expect(result).toMatchInlineSnapshot(`
-    Object {
-      "dry_run": "",
-      "merge_target": "",
-      "path": ".",
-      "repo": "sentry",
-      "requester": "BYK",
-      "targets": Array [
+  const result = await detailsFromContext(defaultTargetInputsArgs);
+  expect(result).toEqual({
+      dry_run: "",
+      merge_target: "",
+      path: ".",
+      repo: "sentry",
+      requester: "BYK",
+      targets: [
         "github",
         "docker[latest]",
       ],
-      "version": "21.3.1",
-    }
-  `);
+      version: "21.3.1",
+    });
+});
+
+test("throw error when context is missing the issue payload", async () => {
+  const fn = () => detailsFromContext({ context: {} });
+  expect(fn).rejects.toThrow('Issue context is not defined');
 });

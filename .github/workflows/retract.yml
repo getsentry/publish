@@ -29,11 +29,7 @@ jobs:
 
       - name: Parse and set inputs
         id: inputs
-        uses: actions/github-script@v5
-        with:
-          script: |
-            const inputs = require(`${process.env.GITHUB_WORKSPACE}/.__publish__/src/publish/inputs.js`).default;
-            return await inputs({context});
+        run: node .__publish__/src/publish/inputs.js
 
       - name: Comment and close
         uses: actions/github-script@v5

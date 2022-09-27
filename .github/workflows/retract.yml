@@ -38,4 +38,5 @@ jobs:
         if: ${{ fromJSON(steps.inputs.outputs.result).requester == github.event.sender.login }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/retract.js

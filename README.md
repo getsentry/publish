@@ -2,6 +2,10 @@
 
 This is a meta/control repository that implements the [Central Publish Repository](docs/rfc.md) RFC
 
+## Quick Start
+
+[craft quick start](https://develop.sentry.dev/sdk/craft-quick-start/)
+
 ## Flow Chart
 
 [![Flow Chart](https://app.code2flow.com/JG4Lgh6rOKdA.png)](https://app.code2flow.com/JG4Lgh6rOKdA)
@@ -17,47 +21,6 @@ This is a meta/control repository that implements the [Central Publish Repositor
  1. We do not want employees to build and publish releases from their machines
  1. We want releases to require formal approvals from a limited set of release managers
  1. We want all the above to not discourage from any engineer initiating a release
-
-## Setup
-
-1. Set up [Craft](https://github.com/getsentry/craft/) for your repo and add `0.21.0` as `minVersion`:
-    ```yaml
-    minVersion: '0.21.0'
-    ```
-1. Add [action-prepare-release](https://github.com/getsentry/action-prepare-release/) to your project in a release workflow under `.github/workflows/release.yml`:
-    ```yaml
-    name: Release
-
-    on:
-      workflow_dispatch:
-        inputs:
-          version:
-            description: Version to release
-            required: true
-          force:
-            description: Force a release even when there are release-blockers (optional)
-            required: false
-
-    jobs:
-      release:
-        runs-on: ubuntu-latest
-        name: 'Release a new version'
-        steps:
-          - uses: actions/checkout@v2
-            with:
-              token: ${{ secrets.GH_RELEASE_PAT }}
-              fetch-depth: 0
-
-          - name: Prepare release
-            uses: getsentry/action-prepare-release@v1
-            env:
-              GITHUB_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
-            with:
-              version: ${{ github.event.inputs.version }}
-              force: ${{ github.event.inputs.force }}
-    ```
-1. Make sure you don't have branch protections enabled on your repository or the [release-bot team](https://github.com/orgs/getsentry/teams/release-bot) is added to your repository as an admin with the "Include administrators" option disabled. This is to ensure we can automatically merge or push to master during the release flows with our bot.
-Also make sure the [engineering team](https://github.com/orgs/getsentry/teams/engineering) has write access to the repo. This is to ensure access of [getsentry-release](https://github.com/getsentry-release) bot.
 
 ## Usage
 

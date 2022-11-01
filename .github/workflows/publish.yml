@@ -12,12 +12,12 @@ jobs:
       SENTRY_DSN: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838"
     steps:
       - name: Get repo contents
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: .__publish__
 
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: 14
           cache: yarn
@@ -36,7 +36,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/post-workflow-details.js
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         name: Check out target repo
         if: ${{ steps.inputs.outputs.result }}
         with:

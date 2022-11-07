@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-20.04
     name: unit tests
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/cache@v2
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
         id: cache
         with:
           path: node_modules

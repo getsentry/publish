@@ -78,6 +78,7 @@ jobs:
           CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
           DOCKER_USERNAME: sentrybuilder
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

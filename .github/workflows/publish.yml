@@ -54,6 +54,10 @@ jobs:
           '[{($source[]): true }] | add | {"published": (. // {}) }'
           > __repo__/.craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
+      # See https://github.com/actions/runner/issues/2033
+      - name: Fix git safe.directory in container
+        run: mkdir -p /home/runner/work/_temp/_github_home && printf "[safe]\n\tdirectory = /github/workspace" > /home/runner/work/_temp/_github_home/.gitconfig
+
       - uses: docker://getsentry/craft:latest
         name: Publish using Craft
         with:

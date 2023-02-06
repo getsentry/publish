@@ -56,7 +56,7 @@ jobs:
 
       # See https://github.com/actions/runner/issues/2033
       - name: Fix git safe.directory in container
-        run: mkdir -p /home/runner/work/_temp/_github_home && printf "[safe]\n\tdirectory = /github/workspace" > /home/runner/work/_temp/_github_home/.gitconfig
+        run: mkdir -p /home/runner/work/_temp/_github_home && printf "[safe]\n\tdirectory = /github/workspace/__repo__" > /home/runner/work/_temp/_github_home/.gitconfig
 
       - uses: docker://getsentry/craft:latest
         name: Publish using Craft

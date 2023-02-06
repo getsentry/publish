@@ -47,7 +47,7 @@ jobs:
 
       # See https://github.com/actions/runner/issues/2033
       - name: Fix git safe.directory in container
-        run: printf "[safe]\n\tdirectory = /github/workspace/__repo__" > /home/runner/work/_temp/_github_home/.gitconfig
+        run: mkdir -p /home/runner/work/_temp/_github_home && printf "[safe]\n\tdirectory = /github/workspace/__repo__" > /home/runner/work/_temp/_github_home/.gitconfig
 
       - name: Set targets
         shell: bash

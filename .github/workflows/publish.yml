@@ -45,6 +45,10 @@ jobs:
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
           fetch-depth: 0
 
+      # See https://github.com/actions/runner/issues/2033
+      - name: Fix git safe.directory in container
+        run: mkdir -p /home/runner/work/_temp/_github_home && printf "[safe]\n\tdirectory = /github/workspace/__repo__" > /home/runner/work/_temp/_github_home/.gitconfig
+
       - name: Set targets
         shell: bash
         if: fromJSON(steps.inputs.outputs.result).targets
@@ -54,20 +58,16 @@ jobs:
           '[{($source[]): true }] | add | {"published": (. // {}) }'
           > __repo__/.craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
-      - name: Pull craft docker image
-        run: docker pull docker.io/getsentry/craft:latest
-
-      - name: Publish using Craft
-        run: |
-            docker run \
-                --rm \
-                --volume "$PWD/__repo__:/src:rw" \
-                --volume '/var/run/docker.sock:/var/run/docker.sock:rw' \
-                --env-host \
-                --env HOME=/root \
-                --workdir "/src/${{ fromJSON(steps.inputs.outputs.result).path }}" \
-                docker.io/getsentry/craft:latest \
-                publish ${{ fromJSON(steps.inputs.outputs.result).version }}
+      - uses: docker://getsentry/craft:latest
+        name: Publish using Craft
+        with:
+          entrypoint: /bin/bash
+          args: >-
+            -e
+            -c "
+            cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }};
+            exec craft publish ${{ fromJSON(steps.inputs.outputs.result).version }};
+            "
         env:
           CRAFT_MERGE_TARGET: ${{ fromJSON(steps.inputs.outputs.result).merge_target }}
           CRAFT_LOG_LEVEL: ${{ secrets.CRAFT_LOG_LEVEL }}

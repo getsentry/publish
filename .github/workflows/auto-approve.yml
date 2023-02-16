@@ -1,0 +1,18 @@
+name: auto-approve non-sdks
+on:
+  issues:
+    types: [opened]
+jobs:
+  auto-approve:
+    runs-on: ubuntu-latest
+    if: |
+      github.actor == 'getsentry-release' && (
+        startsWith(github.event.issue.title, 'publish: getsentry/arroyo@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/pytest-sentry@') ||
+        false
+      )
+    steps:
+      - run: gh issue edit ${{ github.event.number }} --add-label accepted
+        env:
+          # can't use `GITHUB_TOKEN` because we need to trigger actions
+          GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}

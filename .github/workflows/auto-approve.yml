@@ -15,4 +15,4 @@ jobs:
       - run: gh issue edit ${{ github.event.issue.html_url }} --add-label accepted
         env:
           # can't use `GITHUB_TOKEN` because we need to trigger actions
-          GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
+          GH_TOKEN: ${{ secrets.GH_SENTRY_BOT_PAT }}

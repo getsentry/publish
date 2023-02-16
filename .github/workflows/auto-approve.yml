@@ -12,7 +12,7 @@ jobs:
         false
       )
     steps:
-      - run: gh issue edit ${{ github.event.number }} --add-label accepted
+      - run: gh issue edit ${{ github.event.issue.number }} --add-label accepted
         env:
           # can't use `GITHUB_TOKEN` because we need to trigger actions
           GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}

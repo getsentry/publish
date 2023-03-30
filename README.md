@@ -60,7 +60,7 @@ with an auto approval.  The reasoning here is that the bump of the dependency re
 proper.  In theory if an independent package gets sufficient independent use of Sentry we might want to reconsider an auto
 approval process for such package as it might become an interesting target for an attacker.
 
-Automatic approvals are managed in the [`auto-approve.yml`](https://github.com/untitaker/publish/blob/main/.github/workflows/auto-approve.yml) workflow.
+Automatic approvals are managed in the [`auto-approve.yml`](https://github.com/getsentry/publish/blob/main/.github/workflows/auto-approve.yml) workflow.
 
 ## Under the hood
 

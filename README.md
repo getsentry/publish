@@ -49,8 +49,18 @@ By default, all releases will be merged to the default branch of your repository
 
 ## Retracting Release Request
 
-To restract a release request, comment `#retract` (as the only comment content) under the request you want to retract.
+To retract a release request, comment `#retract` (as the only comment content) under the request you want to retract.
 The only person that can do retract a release, is the same person that initially requested it and is listed in the request description.
+
+## Approvals
+
+Packages we release into the wider world that our customers install, require an explicit approval.  This for instance applies to
+`sentry-cli`, our SDKs or the `symbolicator` distributed utilities.  Internal dependencies such as `arroyo` can be published
+with an auto approval.  The reasoning here is that the bump of the dependency requires an explicit approval again in Sentry
+proper.  In theory if an independent package gets sufficient independent use of Sentry we might want to reconsider an auto
+approval process for such package as it might become an interesting target for an attacker.
+
+Automatic approvals are managed in the [`auto-approve.yml`](https://github.com/untitaker/publish/blob/main/.github/workflows/auto-approve.yml) workflow.
 
 ## Under the hood
 

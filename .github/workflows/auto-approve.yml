@@ -13,6 +13,7 @@ jobs:
         startsWith(github.event.issue.title, 'publish: getsentry/json-schema-diff@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-redis-tools@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/relay/py@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/responses@') ||
         false
       )
     steps:

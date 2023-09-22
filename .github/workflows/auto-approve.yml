@@ -7,6 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.actor == 'getsentry-release' && (
+        startsWith(github.event.issue.title, 'publish: getsentry/snuba-sdk@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/arroyo@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/pytest-sentry@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-kafka-schemas@') ||

@@ -1,7 +1,6 @@
-name: Publish
+name: Network test
 on:
-  issues:
-    types: [labeled]
+  workflow_dispatch:
 jobs:
   network-test:
     runs-on: ubuntu-latest

@@ -12,6 +12,7 @@ jobs:
         startsWith(github.event.issue.title, 'publish: getsentry/pytest-sentry@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/relay/py@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/responses@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/sentry-forked-django-stubs@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-kafka-schemas@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-redis-tools@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/snuba-sdk@') ||

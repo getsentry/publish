@@ -48,6 +48,23 @@ test("parse inputs", async () => {
     });
 });
 
+test("can parse version containing +", async () => {
+    const result = await detailsFromContext({
+      context: {
+        repo: { owner: "getsentry", repo: "publish" },
+        payload: {
+          issue: {
+            number: "123",
+            title: "publish: getsentry/sentry-forked-django-stubs@4.2.6+sentry1",
+            body: "Requested by: @example",
+            labels: [],
+          }
+        }
+      }
+    });
+    expect(result.version).toEqual('4.2.6+sentry1');
+});
+
 const defaultTargetInputsArgs = {
   context: {
     repo: { owner: "getsentry", repo: "publish" },

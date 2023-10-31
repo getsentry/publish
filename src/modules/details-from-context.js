@@ -3,7 +3,7 @@ async function detailsFromContext({ context }) {
     throw new Error('Issue context is not defined');
   }
 
-  const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./-]+)?@(?<version>[\w.-]+)$/;
+  const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./-]+)?@(?<version>[\w.+-]+)$/;
   const titleMatch = context.payload.issue.title.match(titleParser).groups;
   const dry_run = context.payload.issue.labels.some((l) => l.name === "dry-run")
     ? "1"

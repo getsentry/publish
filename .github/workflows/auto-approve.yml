@@ -8,6 +8,7 @@ jobs:
     if: |
       github.actor == 'getsentry-release' && (
         startsWith(github.event.issue.title, 'publish: getsentry/arroyo@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/devenv@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/json-schema-diff@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/pytest-sentry@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/relay/py@') ||

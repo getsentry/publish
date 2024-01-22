@@ -52,7 +52,7 @@ jobs:
           jq -n --argjson
           source '${{ toJSON(fromJSON(steps.inputs.outputs.result).targets) }}'
           '[{($source[]): true }] | add | {"published": (. // {}) }'
-          > __repo__/.craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
+          > __repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/.craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
       - uses: docker://getsentry/craft:latest
         name: Publish using Craft

@@ -9,10 +9,14 @@ jobs:
       github.actor == 'getsentry-release' && (
         startsWith(github.event.issue.title, 'publish: getsentry/arroyo@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/devenv@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/js-source-scopes@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/json-schema-diff@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/ophio@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/pytest-sentry@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/relay/py@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/responses@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/rust-proguard@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/rust-sourcemap@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/rust-usage-accountant@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-forked-django-stubs@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-forked-djangorestframework-stubs@') ||
@@ -20,7 +24,9 @@ jobs:
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-redis-tools@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/snuba-sdk@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/statsdproxy@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/symbolic@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/usage-accountant@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/watto@') ||
         false
       )
     steps:

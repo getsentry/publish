@@ -22,6 +22,7 @@ jobs:
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-forked-djangorestframework-stubs@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-kafka-schemas@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-redis-tools@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/skrooge@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/snuba-sdk@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/statsdproxy@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/symbolic@') ||

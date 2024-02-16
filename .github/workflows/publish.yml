@@ -36,11 +36,28 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/post-workflow-details.js
 
+      # Setting the target repo branch will cause the craft config (.craft.yml) to be taken from the checked out branch
+      # By default, we check out the default branch of the repo.
+      # If you need to maintain diverging craft configs on different branches, add your repo and the merge target branch
+      # (i.e. the branch craft will merge the release branch into) into the if condition below.
+      - name: Set target repo checkout branch
+        # Note: Branches registered here MUST BE protected in the target repo!
+        if: |
+          fromJSON(steps.inputs.outputs.result).repo == 'sentry-javascript' && fromJSON(steps.inputs.outputs.result).merge_target == 'develop' ||
+          fromJSON(steps.inputs.outputs.result).repo == 'sentry-javascript' && fromJSON(steps.inputs.outputs.result).merge_target == 'v7' ||
+          fromJSON(steps.inputs.outputs.result).repo == 'sentry-migr8' && fromJSON(steps.inputs.outputs.result).merge_target == 'main' ||
+          fromJSON(steps.inputs.outputs.result).repo == 'sentry-migr8' && fromJSON(steps.inputs.outputs.result).merge_target == 'tmp-merge-target'
+        id: target-repo-branch
+        run: |
+          target_repo_branch="{{ fromJSON(steps.inputs.outputs.result).merge_target }}"
+          echo 'taking craft config from branch {{ fromJSON(steps.inputs.outputs.result).merge_target }} in {{ fromJSON(steps.inputs.outputs.result).repo }}'
+
       - uses: actions/checkout@v3
         name: Check out target repo
         if: ${{ steps.inputs.outputs.result }}
         with:
           path: __repo__
+          ref: ${{ steps.target-repo-branch.outputs.target_repo_branch || ''}}
           repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
           token: ${{ secrets.GH_SENTRY_BOT_PAT }}
           fetch-depth: 0

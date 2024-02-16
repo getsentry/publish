@@ -43,7 +43,6 @@ jobs:
       - name: Set target repo checkout branch
         # Note: Branches registered here MUST BE protected in the target repo!
         if: |
-          fromJSON(steps.inputs.outputs.result).repo == 'sentry-migr8' && fromJSON(steps.inputs.outputs.result).merge_target == 'main' ||
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-migr8' && fromJSON(steps.inputs.outputs.result).merge_target == 'tmp-merge-target'
         id: target-repo-branch
         run: |

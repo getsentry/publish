@@ -46,8 +46,8 @@ jobs:
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-migr8' && fromJSON(steps.inputs.outputs.result).merge_target == 'tmp-merge-target'
         id: target-repo-branch
         run: |
-          target_repo_branch="${{ fromJSON(steps.inputs.outputs.result).merge_target }}"
           echo 'taking craft config from branch ${{ fromJSON(steps.inputs.outputs.result).merge_target }} in ${{ fromJSON(steps.inputs.outputs.result).repo }}'
+          echo 'target_repo_branch=${{ fromJSON(steps.inputs.outputs.result).merge_target }}' >> '$GITHUB_OUTPUT'
 
       - uses: actions/checkout@v3
         name: Check out target repo

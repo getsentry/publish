@@ -44,7 +44,8 @@ jobs:
         # Note: Branches registered here MUST BE protected in the target repo!
         if: |
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-migr8' && fromJSON(steps.inputs.outputs.result).merge_target == 'tmp-merge-target' ||
-          fromJSON(steps.inputs.outputs.result).repo == 'sentry-javascript' && fromJSON(steps.inputs.outputs.result).merge_target == 'v7'
+          fromJSON(steps.inputs.outputs.result).repo == 'sentry-javascript' && (fromJSON(steps.inputs.outputs.result).merge_target == 'v7' || fromJSON(steps.inputs.outputs.result).merge_target == 'master') ||
+          false
         id: target-repo-branch
         run: |
           echo 'taking craft config from branch ${{ fromJSON(steps.inputs.outputs.result).merge_target }} in ${{ fromJSON(steps.inputs.outputs.result).repo }}'

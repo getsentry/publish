@@ -46,6 +46,7 @@ jobs:
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-migr8' && fromJSON(steps.inputs.outputs.result).merge_target == 'tmp-merge-target' ||
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-javascript' && fromJSON(steps.inputs.outputs.result).merge_target == 'v7' ||
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-javascript' && fromJSON(steps.inputs.outputs.result).merge_target == 'master' ||
+          fromJSON(steps.inputs.outputs.result).repo == 'sentry-wizard' && fromJSON(steps.inputs.outputs.result).merge_target == '1.x' ||
           false
         id: target-repo-branch
         run: |

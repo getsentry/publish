@@ -23,6 +23,7 @@ jobs:
         startsWith(github.event.issue.title, 'publish: getsentry/rust-usage-accountant@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-forked-django-stubs@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-forked-djangorestframework-stubs@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/sentry-infra-tools@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-kafka-schemas@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-protos@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-redis-tools@') ||

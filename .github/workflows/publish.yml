@@ -4,7 +4,7 @@ on:
     types: [labeled]
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.label.name == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     name: Publish a new version
     if: github.event.label.name == 'accepted' && github.event.issue.state == 'open'
     timeout-minutes: 90

@@ -60,6 +60,7 @@ jobs:
         with:
           app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          owner: getsentry # create token that have access to all repos
 
       - uses: actions/checkout@v3
         name: Check out target repo

@@ -57,11 +57,11 @@ test("can parse version containing +", async () => {
           title: "publish: getsentry/sentry-forked-django-stubs@4.2.6+sentry1",
           body: "Requested by: @example",
           labels: [],
-        },
-      },
-    },
+          }
+        }
+      }
   });
-  expect(result.version).toEqual("4.2.6+sentry1");
+    expect(result.version).toEqual('4.2.6+sentry1');
 });
 
 const defaultTargetInputsArgs = {
@@ -98,12 +98,15 @@ test("Do not extract merge_target value if its a default value", async () => {
     path: ".",
     repo: "sentry",
     requester: "BYK",
-    targets: ["github", "docker[latest]"],
+      targets: [
+        "github",
+        "docker[latest]",
+      ],
     version: "21.3.1",
   });
 });
 
 test("throw error when context is missing the issue payload", async () => {
   const fn = () => detailsFromContext({ context: {} });
-  expect(fn).rejects.toThrow("Issue context is not defined");
+  expect(fn).rejects.toThrow('Issue context is not defined');
 });

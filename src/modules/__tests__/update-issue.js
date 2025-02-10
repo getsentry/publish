@@ -83,9 +83,7 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
 
   if (stateFileExists) {
     test("restore publish state", async () => {
-      expect(updateTargetsArgs.octokit.rest.issues.get).toHaveBeenCalledTimes(
-        1
-      );
+      expect(updateTargetsArgs.octokit.rest.issues.get).toHaveBeenCalledTimes(1);
       expect(updateTargetsArgs.octokit.rest.issues.get.mock.calls[0])
         .toMatchInlineSnapshot(`
         Array [
@@ -97,9 +95,9 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
         ]
       `);
 
-      expect(
-        updateTargetsArgs.octokit.rest.issues.update
-      ).toHaveBeenCalledTimes(1);
+      expect(updateTargetsArgs.octokit.rest.issues.update).toHaveBeenCalledTimes(
+        1
+      );
       expect(updateTargetsArgs.octokit.rest.issues.update.mock.calls[0])
         .toMatchInlineSnapshot(`
         Array [

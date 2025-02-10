@@ -1,6 +1,6 @@
-const { updateIssue } = require("../modules/update-issue.js");
-const { getGitHubToken } = require("../libs/github");
-const github = require("@actions/github");
+const updateIssue = require('../modules/update-issue.js');
+const {getGitHubToken} = require('../libs/github');
+const github = require('@actions/github');
 
 const context = github.context;
 const octokit = github.getOctokit(getGitHubToken());

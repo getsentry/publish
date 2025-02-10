@@ -5,13 +5,13 @@ const TARGETS_SECTION_PARSER_REGEX = /^(?!### Targets$\s)(?: *- \[[ x]\] \S+\s*$
 
 /**
  * Matches all targets of a github publish issue body in a section that was already matched and extracted with `TARGETS_PARSER_REGEX`.
- * The "id" of the target is captured within a capture group.
+ * The "id" of the targets is captured within a capture group.
  */
 const TARGETS_PARSER_REGEX = /^\s*- \[[ x]\] (\S+)/gim;
 
 /**
  * Matches checked targets of a github publish issue body in a section that was already matched and extracted with `TARGETS_PARSER_REGEX`.
- * The "id" of the target is captured within a capture group.
+ * The "id" of the targets is captured within a capture group.
  */
 const CHECKED_TARGETS_PARSER_REGEX = /^\s*- \[x\] (\S+)/gim;
 

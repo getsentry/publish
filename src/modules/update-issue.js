@@ -1,4 +1,8 @@
 const fs = require("fs");
+const {
+  TARGETS_SECTION_PARSER_REGEX,
+  TARGETS_PARSER_REGEX,
+} = require("./details-from-context");
 
 async function updateTargets({octokit, version, publishRepo, issue_number}) {
   const CRAFT_STATE_FILE_PATH = `${process.env.GITHUB_WORKSPACE}/__repo__/.craft-publish-${version}.json`;
@@ -21,38 +25,38 @@ async function updateTargets({octokit, version, publishRepo, issue_number}) {
     craftStateRequest,
   ]);
 
-  const targetsParser = /^(?!### Targets$\s)^(?: *- \[[ x]\] [\w.[\]-]+[ ]*$(?:\r?\n)?)+/m;
-  const declaredTargets = new Set();
-  let leadingSpaces = " ";
-  const newIssueBody = issue.body.replace(targetsParser, (targetsSection) => {
-    let targetsText = targetsSection.trimRight();
-    const targetMatcher = /^( *)- \[[ x]\] ([\w.[\]-]+)$/gim;
-    targetsText = targetsText.replace(
-      targetMatcher,
-      (_match, spaces, target) => {
-        leadingSpaces = spaces;
-        declaredTargets.add(target);
-        const x = craftState.published[target] ? "x" : " ";
-        return `${spaces}- [${x}] ${target}`;
-      }
-    );
-    const unlistedTargets = Object.keys(craftState.published)
-      .filter((target) => !declaredTargets.has(target))
-      .map(
-        (target) =>
-          `${leadingSpaces}- [${
-            craftState.published[target] ? "x" : " "
-          }] ${target}`
-      )
-      .join("\n");
-    targetsText += `\n${unlistedTargets}\n`;
-    return targetsText;
-  });
+  const newIssueBody = transformIssueBody(craftState, issue.body);
 
   await octokit.rest.issues.update({
     ...publishRepo,
     issue_number,
     body: newIssueBody,
+  });
+}
+
+function transformIssueBody(craftState, issueBody) {
+  const declaredTargets = new Set();
+  return issueBody.replace(
+    TARGETS_SECTION_PARSER_REGEX,
+    (targetsSection) => {
+      let targetsText = targetsSection.trimRight();
+      targetsText = targetsText.replace(
+        TARGETS_PARSER_REGEX,
+        (_match, targetId) => {
+          declaredTargets.add(targetId);
+          const x = craftState.published[targetId] ? "x" : " ";
+          return `- [${x}] ${targetId}`;
+        }
+      );
+      const unlistedTargets = Object.keys(craftState.published)
+        .filter((target) => !declaredTargets.has(target))
+        .map(
+          (target) =>
+            `- [${craftState.published[target] ? "x" : " "}] ${target}`
+        )
+        .join("\n") + '\n';
+      targetsText += `\n${unlistedTargets}\n`;
+      return targetsText;
   });
 }
 
@@ -69,6 +73,6 @@ async function updateIssue({ context, octokit, inputs }) {
       name: "accepted",
     }),
   ]);
-};
+}
 
-module.exports = updateIssue;
+module.exports = { updateIssue, transformIssueBody };

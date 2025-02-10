@@ -1,3 +1,21 @@
+/**
+ * Matches the entire "Targets" section of a github publish issue body.
+ */
+const TARGETS_SECTION_PARSER_REGEX = /^(?!### Targets$\s)(?: *- \[[ x]\] \S+\s*$(?:\r?\n)?)+/m;
+
+/**
+ * Matches all targets of a github publish issue body in a section that was already matched and extracted with `TARGETS_PARSER_REGEX`.
+ * The "id" of the target is captured within a capture group.
+ */
+const TARGETS_PARSER_REGEX = /^\s*- \[[ x]\] (\S+)/gim;
+
+/**
+ * Matches checked targets of a github publish issue body in a section that was already matched and extracted with `TARGETS_PARSER_REGEX`.
+ * The "id" of the target is captured within a capture group.
+ */
+const CHECKED_TARGETS_PARSER_REGEX = /^\s*- \[x\] (\S+)/gim;
+
+
 async function detailsFromContext({ context }) {
   if (!context || !context.payload || !context.payload.issue) {
     throw new Error('Issue context is not defined');
@@ -27,14 +45,12 @@ async function detailsFromContext({ context }) {
     merge_target = mergeTargetMatch.groups.merge_target || "";
   }
 
-  const targetsParser = /^(?!### Targets$\s)(?: *- \[[ x]\] [\w.[\]-]+$(?:\r?\n)?)+/m;
-  const targetsMatch = context.payload.issue.body.match(targetsParser);
+  const targetsMatch = context.payload.issue.body.match(TARGETS_SECTION_PARSER_REGEX);
   let targets;
   if (targetsMatch) {
-    const targetMatcher = /^ *- \[x\] ([\w.[\]-]+)$(?:\r?\n)?/gim;
-    targets = Array.from(targetsMatch[0].matchAll(targetMatcher)).map(
-      (x) => x[1]
-    );
+    targets = Array.from(
+      targetsMatch[0].matchAll(CHECKED_TARGETS_PARSER_REGEX)
+    ).map((x) => x[1]);
   }
 
   return {
@@ -45,6 +61,11 @@ async function detailsFromContext({ context }) {
     requester,
     targets,
   };
-};
+}
 
-module.exports = detailsFromContext;
+module.exports = {
+  detailsFromContext,
+  TARGETS_SECTION_PARSER_REGEX,
+  TARGETS_PARSER_REGEX,
+  CHECKED_TARGETS_PARSER_REGEX,
+};

@@ -1,6 +1,6 @@
 /* eslint-env jest */
 
-const detailsFromContext = require("../details-from-context.js");
+const { detailsFromContext } = require("../details-from-context.js");
 
 const inputsArgs = {
   context: {
@@ -24,6 +24,8 @@ Assign the **accepted** label to this issue to approve the release.
  - [x] github\r
  - [ ] pypi\r
  - [ ] docker[release]
+ - [ ] npm[@sentry/opentelemetry]
+ - [x] npm[@sentry/node]
  - [x] docker[latest]\r
 `,
         labels: ["accepted"],
@@ -35,34 +37,31 @@ Assign the **accepted** label to this issue to approve the release.
 test("parse inputs", async () => {
   const result = await detailsFromContext(inputsArgs);
   expect(result).toEqual({
-      dry_run: "",
-      merge_target: "custom-branch",
-      path: ".",
-      repo: "sentry",
-      requester: "BYK",
-      targets: [
-        "github",
-        "docker[latest]",
-      ],
-      version: "21.3.1",
-    });
+    dry_run: "",
+    merge_target: "custom-branch",
+    path: ".",
+    repo: "sentry",
+    requester: "BYK",
+    targets: ["github", "npm[@sentry/node]", "docker[latest]"],
+    version: "21.3.1",
+  });
 });
 
 test("can parse version containing +", async () => {
-    const result = await detailsFromContext({
-      context: {
-        repo: { owner: "getsentry", repo: "publish" },
-        payload: {
-          issue: {
-            number: "123",
-            title: "publish: getsentry/sentry-forked-django-stubs@4.2.6+sentry1",
-            body: "Requested by: @example",
-            labels: [],
-          }
-        }
-      }
-    });
-    expect(result.version).toEqual('4.2.6+sentry1');
+  const result = await detailsFromContext({
+    context: {
+      repo: { owner: "getsentry", repo: "publish" },
+      payload: {
+        issue: {
+          number: "123",
+          title: "publish: getsentry/sentry-forked-django-stubs@4.2.6+sentry1",
+          body: "Requested by: @example",
+          labels: [],
+        },
+      },
+    },
+  });
+  expect(result.version).toEqual("4.2.6+sentry1");
 });
 
 const defaultTargetInputsArgs = {
@@ -94,20 +93,17 @@ Assign the **accepted** label to this issue to approve the release.
 test("Do not extract merge_target value if its a default value", async () => {
   const result = await detailsFromContext(defaultTargetInputsArgs);
   expect(result).toEqual({
-      dry_run: "",
-      merge_target: "",
-      path: ".",
-      repo: "sentry",
-      requester: "BYK",
-      targets: [
-        "github",
-        "docker[latest]",
-      ],
-      version: "21.3.1",
-    });
+    dry_run: "",
+    merge_target: "",
+    path: ".",
+    repo: "sentry",
+    requester: "BYK",
+    targets: ["github", "docker[latest]"],
+    version: "21.3.1",
+  });
 });
 
 test("throw error when context is missing the issue payload", async () => {
   const fn = () => detailsFromContext({ context: {} });
-  expect(fn).rejects.toThrow('Issue context is not defined');
+  expect(fn).rejects.toThrow("Issue context is not defined");
 });

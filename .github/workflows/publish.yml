@@ -44,6 +44,7 @@ jobs:
         # Note: Branches registered here MUST BE protected in the target repo!
         if: |
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-migr8' && fromJSON(steps.inputs.outputs.result).merge_target == 'tmp-merge-target' ||
+          fromJSON(steps.inputs.outputs.result).repo == 'sentry-javascript' && fromJSON(steps.inputs.outputs.result).merge_target == 'v8' ||
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-javascript' && fromJSON(steps.inputs.outputs.result).merge_target == 'v7' ||
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-javascript' && fromJSON(steps.inputs.outputs.result).merge_target == 'master' ||
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-wizard' && fromJSON(steps.inputs.outputs.result).merge_target == '1.x' ||
@@ -53,6 +54,14 @@ jobs:
           echo 'taking craft config from branch ${{ fromJSON(steps.inputs.outputs.result).merge_target }} in ${{ fromJSON(steps.inputs.outputs.result).repo }}'
           echo 'target_repo_branch=${{ fromJSON(steps.inputs.outputs.result).merge_target }}' >> "$GITHUB_OUTPUT"
 
+      - name: Get auth token
+        id: token
+        uses: actions/create-github-app-token@5d869da34e18e7287c1daad50e0b8ea0f506ce69 # v1.11.0
+        with:
+          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          owner: getsentry # create token that have access to all repos
+
       - uses: actions/checkout@v3
         name: Check out target repo
         if: ${{ steps.inputs.outputs.result }}
@@ -60,7 +69,7 @@ jobs:
           path: __repo__
           ref: ${{ steps.target-repo-branch.outputs.target_repo_branch || ''}}
           repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
-          token: ${{ secrets.GH_SENTRY_BOT_PAT }}
+          token: ${{ steps.token.outputs.token }}
           fetch-depth: 0
 
       - name: Set targets
@@ -90,7 +99,7 @@ jobs:
           GIT_COMMITTER_NAME: getsentry-bot
           GIT_AUTHOR_NAME: getsentry-bot
           EMAIL: bot@getsentry.com
-          GITHUB_API_TOKEN: ${{ secrets.GH_SENTRY_BOT_PAT }}
+          GITHUB_API_TOKEN: ${{ steps.token.outputs.token }}
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
           CRAFT_GCS_TARGET_CREDS_JSON: ${{ secrets.CRAFT_GCS_TARGET_CREDS_JSON }}
           CRAFT_GCS_STORE_CREDS_JSON: ${{ secrets.CRAFT_GCS_STORE_CREDS_JSON }}

@@ -6,7 +6,10 @@ jobs:
   auto-approve:
     runs-on: ubuntu-latest
     if: |
-      github.actor == 'getsentry-release' && (
+      ( 
+        github.actor == 'getsentry-release' ||
+        github.actor == 'sentry-release-bot[bot]'
+      ) && (
         startsWith(github.event.issue.title, 'publish: getsentry/arroyo@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/devenv@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/infra-event-notifier@') ||

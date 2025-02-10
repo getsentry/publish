@@ -1,6 +1,6 @@
 /* eslint-env jest */
 
-const detailsFromContext = require("../details-from-context.js");
+const { detailsFromContext } = require("../details-from-context.js");
 
 const inputsArgs = {
   context: {
@@ -24,6 +24,8 @@ Assign the **accepted** label to this issue to approve the release.
  - [x] github\r
  - [ ] pypi\r
  - [ ] docker[release]
+ - [ ] npm[@sentry/opentelemetry]
+ - [x] npm[@sentry/node]
  - [x] docker[latest]\r
 `,
         labels: ["accepted"],
@@ -35,17 +37,14 @@ Assign the **accepted** label to this issue to approve the release.
 test("parse inputs", async () => {
   const result = await detailsFromContext(inputsArgs);
   expect(result).toEqual({
-      dry_run: "",
-      merge_target: "custom-branch",
-      path: ".",
-      repo: "sentry",
-      requester: "BYK",
-      targets: [
-        "github",
-        "docker[latest]",
-      ],
-      version: "21.3.1",
-    });
+    dry_run: "",
+    merge_target: "custom-branch",
+    path: ".",
+    repo: "sentry",
+    requester: "BYK",
+    targets: ["github", "npm[@sentry/node]", "docker[latest]"],
+    version: "21.3.1",
+  });
 });
 
 test("can parse version containing +", async () => {

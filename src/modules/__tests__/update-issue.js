@@ -3,7 +3,7 @@
 jest.mock("fs");
 
 const fs = require("fs");
-const updateIssue = require("../update-issue.js");
+const { updateIssue, transformIssueBody } = require("../update-issue.js");
 
 const updateTargetsArgs = {
   inputs: { repo: "sentry", version: "21.3.1" },
@@ -120,6 +120,7 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
         - [ ] docker[latest]
         - [x] lol
         - [ ] hey
+
         ",
             "issue_number": "211",
             "owner": "getsentry",
@@ -145,5 +146,57 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
       issue_number: "211",
       name: "accepted",
     });
+  });
+});
+
+describe("transformIssueBody", () => {
+  it("should correctly transform an issue body", () => {
+    const result = transformIssueBody(
+      {
+        published: {
+          "npm[@sentry/node]": true,
+          "aws-lambda": true,
+          github: false,
+          foo: true,
+        },
+      },
+      `Requested by: @lforst
+
+Merge target: (default)
+
+Quick links:
+- [View changes](https://github.com/getsentry/sentry-elixir/compare/2f5876adf89822cc75199576966df4fd587f68e9...refs/heads/release/10.7.2)
+- [View check runs](https://github.com/getsentry/sentry-elixir/commit/fcbc69b88481a95532d10a6162a243107fabb96a/checks/)
+Assign the **accepted** label to this issue to approve the release.
+Leave a comment containing \`#retract\` under this issue to retract the release (original issuer only).
+
+### Targets
+
+ - [ ] npm[@sentry/node]
+ - [x] aws-lambda
+ - [x] github
+
+
+Targets marked with a checkbox have already been executed.  Administrators can manually tick a checkbox to force craft to skip it.\n`
+    );
+
+    expect(result).toBe(`Requested by: @lforst
+
+Merge target: (default)
+
+Quick links:
+- [View changes](https://github.com/getsentry/sentry-elixir/compare/2f5876adf89822cc75199576966df4fd587f68e9...refs/heads/release/10.7.2)
+- [View check runs](https://github.com/getsentry/sentry-elixir/commit/fcbc69b88481a95532d10a6162a243107fabb96a/checks/)
+Assign the **accepted** label to this issue to approve the release.
+Leave a comment containing \`#retract\` under this issue to retract the release (original issuer only).
+
+### Targets
+
+- [x] npm[@sentry/node]
+- [x] aws-lambda
+- [ ] github
+- [x] foo
+
+Targets marked with a checkbox have already been executed.  Administrators can manually tick a checkbox to force craft to skip it.\n`);
   });
 });

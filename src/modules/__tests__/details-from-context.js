@@ -48,19 +48,19 @@ test("parse inputs", async () => {
 });
 
 test("can parse version containing +", async () => {
-  const result = await detailsFromContext({
-    context: {
-      repo: { owner: "getsentry", repo: "publish" },
-      payload: {
-        issue: {
-          number: "123",
-          title: "publish: getsentry/sentry-forked-django-stubs@4.2.6+sentry1",
-          body: "Requested by: @example",
-          labels: [],
+    const result = await detailsFromContext({
+      context: {
+        repo: { owner: "getsentry", repo: "publish" },
+        payload: {
+          issue: {
+            number: "123",
+            title: "publish: getsentry/sentry-forked-django-stubs@4.2.6+sentry1",
+            body: "Requested by: @example",
+            labels: [],
           }
         }
       }
-  });
+    });
     expect(result.version).toEqual('4.2.6+sentry1');
 });
 
@@ -93,17 +93,17 @@ Assign the **accepted** label to this issue to approve the release.
 test("Do not extract merge_target value if its a default value", async () => {
   const result = await detailsFromContext(defaultTargetInputsArgs);
   expect(result).toEqual({
-    dry_run: "",
-    merge_target: "",
-    path: ".",
-    repo: "sentry",
-    requester: "BYK",
+      dry_run: "",
+      merge_target: "",
+      path: ".",
+      repo: "sentry",
+      requester: "BYK",
       targets: [
         "github",
         "docker[latest]",
       ],
-    version: "21.3.1",
-  });
+      version: "21.3.1",
+    });
 });
 
 test("throw error when context is missing the issue payload", async () => {

@@ -1,4 +1,4 @@
-const updateIssue = require('../modules/update-issue.js');
+const { updateIssue } = require('../modules/update-issue.js');
 const {getGitHubToken} = require('../libs/github');
 const github = require('@actions/github');
 

@@ -25,6 +25,7 @@ jobs:
         startsWith(github.event.issue.title, 'publish: getsentry/rust-proguard@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/rust-sourcemap@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/rust-usage-accountant@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/script-runner@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-forked-django-stubs@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-forked-djangorestframework-stubs@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/sentry-forked-jsonnet@') ||
@@ -41,7 +42,6 @@ jobs:
         startsWith(github.event.issue.title, 'publish: getsentry/symbolic@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/usage-accountant@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/watto@') ||
-        startsWith(github.event.issue.title, 'publish: getsentry/script-runner@') ||
         false
       )
     steps:

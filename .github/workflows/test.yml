@@ -10,7 +10,7 @@ defaults:
     shell: bash
 jobs:
   unit-test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     name: unit tests
     steps:
       - uses: actions/checkout@v3

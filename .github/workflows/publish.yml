@@ -5,9 +5,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     name: Publish a new version
     if: github.event.label.name == 'accepted' && github.event.issue.state == 'open'
     timeout-minutes: 90
@@ -84,12 +81,6 @@ jobs:
           '[{($source[]): true }] | add | {"published": (. // {}) }'
           > __repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/.craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
 
-      - id: Auth
-        uses: google-github-actions/auth@ba79af03959ebeac9769e648f473a284504d9193 # v2.1.10
-        with:
-          workload_identity_provider: 'projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool'
-          service_account: "gha-publish@sac-prod-sa.iam.gserviceaccount.com"
-
       - uses: docker://getsentry/craft:latest
         name: Publish using Craft
         with:
@@ -110,6 +101,8 @@ jobs:
           EMAIL: bot@getsentry.com
           GITHUB_API_TOKEN: ${{ steps.token.outputs.token }}
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+          CRAFT_GCS_TARGET_CREDS_JSON: ${{ secrets.CRAFT_GCS_TARGET_CREDS_JSON }}
+          CRAFT_GCS_STORE_CREDS_JSON: ${{ secrets.CRAFT_GCS_STORE_CREDS_JSON }}
           CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
           DOCKER_USERNAME: sentrybuilder
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}

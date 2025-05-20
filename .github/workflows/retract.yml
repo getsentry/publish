@@ -12,7 +12,7 @@ jobs:
       !github.event.issue.pull_request &&
       contains(
         format(fromJSON('"\r\n{0}\r\n"'), github.event.comment.body),
-        fromJSON('"\r\n#retract\r\n"')
+        fromJSON('"\n#retract\n"')
       )
     steps:
       - name: Get repo contents

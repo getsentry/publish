@@ -11,8 +11,8 @@ jobs:
     if: |
       !github.event.issue.pull_request &&
       contains(
-        format(fromJSON('"\r\n{0}\r\n"'), github.event.comment.body),
-        fromJSON('"\r\n#retract\r\n"')
+        format(fromJSON('"\n{0}\n"'), github.event.comment.body),
+        fromJSON('"\n#retract\n"')
       )
     steps:
       - name: Get repo contents

@@ -168,7 +168,7 @@ Quick links:
 - [View changes](https://github.com/getsentry/sentry-elixir/compare/2f5876adf89822cc75199576966df4fd587f68e9...refs/heads/release/10.7.2)
 - [View check runs](https://github.com/getsentry/sentry-elixir/commit/fcbc69b88481a95532d10a6162a243107fabb96a/checks/)
 Assign the **accepted** label to this issue to approve the release.
-To retract the release, the person requesting it must leave a comment containing \`#retract\` followed by a newline under this issue.
+To retract the release, the person requesting it must leave a comment containing \`#retract\` on a line by itself under this issue.
 
 ### Targets
 
@@ -188,7 +188,7 @@ Quick links:
 - [View changes](https://github.com/getsentry/sentry-elixir/compare/2f5876adf89822cc75199576966df4fd587f68e9...refs/heads/release/10.7.2)
 - [View check runs](https://github.com/getsentry/sentry-elixir/commit/fcbc69b88481a95532d10a6162a243107fabb96a/checks/)
 Assign the **accepted** label to this issue to approve the release.
-To retract the release, the person requesting it must leave a comment containing \`#retract\` followed by a newline under this issue.
+To retract the release, the person requesting it must leave a comment containing \`#retract\` on a line by itself under this issue.
 
 ### Targets
 

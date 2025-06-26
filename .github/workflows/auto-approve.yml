@@ -10,6 +10,7 @@ jobs:
         github.actor == 'getsentry-release' ||
         github.actor == 'sentry-release-bot[bot]'
       ) && (
+        contains(github.event.issue.labels.*.name, 'dry-run') ||
         startsWith(github.event.issue.title, 'publish: getsentry/arroyo@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/auto-type-annotate@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/devenv@') ||

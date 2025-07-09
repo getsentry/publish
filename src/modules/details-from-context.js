@@ -1,7 +1,7 @@
 /**
  * Matches the entire "Targets" section of a github publish issue body.
  */
-const TARGETS_SECTION_PARSER_REGEX = /^(?!### Targets$\s)(?: *- \[[ x]\] \S+\s*$(?:\r?\n)?)+/im;
+const TARGETS_SECTION_PARSER_REGEX = /^(?!### Targets$\s)(?: *- \[[ xX]\] \S+\s*$(?:\r?\n)?)+/m;
 
 /**
  * Matches all targets of a github publish issue body in a section that was already matched and extracted with `TARGETS_PARSER_REGEX`.

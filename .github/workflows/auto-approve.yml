@@ -17,6 +17,7 @@ jobs:
         startsWith(github.event.issue.title, 'publish: getsentry/jest-sentry-environment@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/js-source-scopes@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/json-schema-diff@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/objectstore/clients@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/ophio@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/pdb@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/pyo3-python-tracing-subscriber@') ||

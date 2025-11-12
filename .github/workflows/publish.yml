@@ -5,6 +5,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: production
     name: Publish a new version
     if: github.event.label.name == 'accepted' && github.event.issue.state == 'open'
     timeout-minutes: 90

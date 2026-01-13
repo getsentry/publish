@@ -103,6 +103,8 @@ jobs:
           GIT_AUTHOR_NAME: getsentry-bot
           EMAIL: bot@getsentry.com
           GITHUB_API_TOKEN: ${{ steps.token.outputs.token }}
+          GITHUB_ACTOR: x-access-token   # for ghcr.io auth
+          GITHUB_TOKEN: ${{ steps.token.outputs.token }}  # for ghcr.io auth
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
           CRAFT_GCS_TARGET_CREDS_JSON: ${{ secrets.CRAFT_GCS_TARGET_CREDS_JSON }}
           CRAFT_GCS_STORE_CREDS_JSON: ${{ secrets.CRAFT_GCS_STORE_CREDS_JSON }}

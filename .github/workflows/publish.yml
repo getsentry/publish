@@ -102,9 +102,13 @@ jobs:
           GIT_COMMITTER_NAME: getsentry-bot
           GIT_AUTHOR_NAME: getsentry-bot
           EMAIL: bot@getsentry.com
-          GITHUB_API_TOKEN: ${{ steps.token.outputs.token }}
-          GITHUB_ACTOR: x-access-token   # for ghcr.io auth
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # for ghcr.io auth
+          GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          # We need to use separate tokens for GHCR.IO and GitHub API access
+          # Because we can only access ghcr.io with GITHUB_TOKEN but that token
+          # cannot do other cross-repo operations like our Release Bot App
+          # Thanks GitHub
+          DOCKER_GHCR_IO_USERNAME: x-access-token   # for ghcr.io auth
+          DOCKER_GHCR_IO_PASSWORD: ${{ secrets.GITHUB_TOKEN }}  # for ghcr.io auth
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
           CRAFT_GCS_TARGET_CREDS_JSON: ${{ secrets.CRAFT_GCS_TARGET_CREDS_JSON }}
           CRAFT_GCS_STORE_CREDS_JSON: ${{ secrets.CRAFT_GCS_STORE_CREDS_JSON }}

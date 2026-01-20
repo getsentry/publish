@@ -1,6 +1,6 @@
-const Sentry = require('@sentry/node');
+const Sentry = require("@sentry/node");
 
-async function processEndState({context, octokit, inputs, status}) {
+async function processEndState({ context, octokit, inputs, status }) {
   const { repo, version } = inputs;
   const { repo: publishRepo, runId: run_id } = context;
   const { number: issue_number } = context.payload.issue;
@@ -26,7 +26,7 @@ async function processEndState({context, octokit, inputs, status}) {
     details,
   });
 
-  if (status === 'success') {
+  if (status === "success") {
     await octokit.rest.issues.update({
       ...publishRepo,
       issue_number,
@@ -34,10 +34,10 @@ async function processEndState({context, octokit, inputs, status}) {
     });
   }
 
-  await reportSession({details, inputs});
+  await reportSession({ details, inputs });
 }
 
-async function postIssueComment({octokit, details}) {
+async function postIssueComment({ octokit, details }) {
   const body = githubIssueComment(details);
   await octokit.rest.issues.createComment({
     ...details.publishRepo,
@@ -46,28 +46,28 @@ async function postIssueComment({octokit, details}) {
   });
 }
 
-function githubIssueComment({status, workflowInfo, version, repo, run_id}) {
-  switch(status) {
-    case 'failure':
+function githubIssueComment({ status, workflowInfo, version, repo, run_id }) {
+  switch (status) {
+    case "failure":
       return `Failed to publish. ([run logs](${
         workflowInfo.html_url
       }?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
-        version
+        version,
       )}) and start over._`;
-    case 'cancelled':
+    case "cancelled":
       return `Publish workflow cancelled. ([run logs](${
         workflowInfo.html_url
       }?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
-        version
+        version,
       )}) and start over._`;
-    case 'success':
+    case "success":
       return `Published successfully: [run#${run_id}](${workflowInfo.html_url})`;
     default:
       throw new Error(`Unknown status: '${status}'`);
   }
 }
 
-async function reportSession({details, inputs}) {
+async function reportSession({ details, inputs }) {
   const release = `${details.repo}@${details.version}`;
   const sentryInfo = sentryInfoFromDetails(details);
 
@@ -85,28 +85,27 @@ async function reportSession({details, inputs}) {
 
     Sentry.captureMessage(sentryInfo.message, sentryInfo.severity);
 
-    const hub = Sentry.getCurrentHub();
-    hub.startSession({status: sentryInfo.status});
-    hub.endSession();
+    Sentry.startSession({ status: sentryInfo.status });
+    Sentry.endSession();
   });
   await Sentry.close();
 }
 
-function sentryInfoFromDetails({status, repo}) {
-  switch(status) {
-    case 'failure':
+function sentryInfoFromDetails({ status, repo }) {
+  switch (status) {
+    case "failure":
       return {
         message: `Release failed: ${repo}`,
         severity: "error",
         status: "crashed",
       };
-    case 'cancelled':
+    case "cancelled":
       return {
         message: `Release cancelled: ${repo}`,
         severity: "warn",
         status: "crashed",
       };
-    case 'success':
+    case "success":
       return {
         message: `Release succeeded: ${repo}`,
         severity: "info",

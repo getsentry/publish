@@ -1,6 +1,6 @@
-/* eslint-env jest */
+import { vi, describe, test, expect } from "vitest";
 
-jest.mock("fs");
+vi.mock("fs");
 
 const retractRelease = require("../retract-release.js");
 
@@ -18,8 +18,8 @@ describe("retract release", () => {
       octokit: {
         rest: {
           issues: {
-            createComment: jest.fn(),
-            update: jest.fn(),
+            createComment: vi.fn(),
+            update: vi.fn(),
           },
         },
       },

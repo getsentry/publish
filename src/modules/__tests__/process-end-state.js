@@ -1,6 +1,6 @@
-/* eslint-env jest */
+import { vi, describe, test, expect } from "vitest";
 
-jest.mock("fs");
+vi.mock("fs");
 
 const processEndState = require("../process-end-state.js");
 
@@ -23,7 +23,7 @@ describe("publish failed", () => {
           }),
         },
         issues: {
-          createComment: jest.fn(),
+          createComment: vi.fn(),
         },
       },
     },
@@ -45,7 +45,7 @@ describe("publish failed", () => {
     const createComment = failureArgs.octokit.rest.issues.createComment;
     expect(createComment).toHaveBeenCalledTimes(1);
     expect(createComment.mock.calls[0][0]).toMatchInlineSnapshot(`
-      Object {
+      {
         "body": "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
 
       _Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
@@ -76,7 +76,7 @@ describe("publish cancelleded", () => {
           }),
         },
         issues: {
-          createComment: jest.fn(),
+          createComment: vi.fn(),
         },
       },
     },
@@ -98,7 +98,7 @@ describe("publish cancelleded", () => {
     const createComment = cancelledArgs.octokit.rest.issues.createComment;
     expect(createComment).toHaveBeenCalledTimes(1);
     expect(createComment.mock.calls[0][0]).toMatchInlineSnapshot(`
-      Object {
+      {
         "body": "Publish workflow cancelled. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
 
       _Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
@@ -129,8 +129,8 @@ describe("publish success", () => {
           }),
         },
         issues: {
-          createComment: jest.fn(),
-          update: jest.fn(),
+          createComment: vi.fn(),
+          update: vi.fn(),
         },
       },
     },
@@ -152,7 +152,7 @@ describe("publish success", () => {
     const createComment = successArgs.octokit.rest.issues.createComment;
     expect(createComment).toHaveBeenCalledTimes(1);
     expect(createComment.mock.calls[0][0]).toMatchInlineSnapshot(`
-      Object {
+      {
         "body": "Published successfully: [run#1234](https://github.com/getsentry/sentry/actions/runs/1234)",
         "issue_number": "211",
         "owner": "getsentry",
@@ -163,7 +163,7 @@ describe("publish success", () => {
     const updateIssue = successArgs.octokit.rest.issues.update;
     expect(updateIssue).toHaveBeenCalledTimes(1);
     expect(updateIssue.mock.calls[0][0]).toMatchInlineSnapshot(`
-      Object {
+      {
         "issue_number": "211",
         "owner": "getsentry",
         "repo": "publish",
@@ -191,8 +191,8 @@ describe("publish unknown status", () => {
           }),
         },
         issues: {
-          createComment: jest.fn(),
-          update: jest.fn(),
+          createComment: vi.fn(),
+          update: vi.fn(),
         },
       },
     },
@@ -209,7 +209,7 @@ describe("publish unknown status", () => {
   };
 
   test("throw error for undefined status", async () => {
-    expect(async () => {
+    await expect(async () => {
       await processEndState(nostatusArgs);
     }).rejects.toThrow("Unknown status: 'undefined'");
 

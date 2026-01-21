@@ -1,6 +1,6 @@
-/* eslint-env jest */
+import { vi, describe, test, expect } from "vitest";
 
-jest.mock("fs");
+vi.mock("fs");
 
 const postWorkflowDetails = require("../post-workflow-details.js");
 
@@ -17,12 +17,13 @@ describe("postWorkflowDetails", () => {
           actions: {
             getWorkflowRun: async () => ({
               data: {
-                html_url: "https://github.com/getsentry/sentry/actions/runs/1234",
+                html_url:
+                  "https://github.com/getsentry/sentry/actions/runs/1234",
               },
             }),
           },
           issues: {
-            createComment: jest.fn(),
+            createComment: vi.fn(),
           },
         },
       },
@@ -33,7 +34,7 @@ describe("postWorkflowDetails", () => {
     const createComment = args.octokit.rest.issues.createComment;
     expect(createComment).toHaveBeenCalledTimes(1);
     expect(createComment.mock.calls[0][0]).toMatchInlineSnapshot(`
-      Object {
+      {
         "body": "Publishing: [run#1234](https://github.com/getsentry/sentry/actions/runs/1234)",
         "issue_number": "211",
         "owner": "getsentry",

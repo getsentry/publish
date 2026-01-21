@@ -6,21 +6,31 @@ This is a meta/control repository that implements the [Central Publish Repositor
 
 [craft quick start](https://develop.sentry.dev/sdk/craft-quick-start/)
 
-## Flow Chart
+## Release Flow
 
-[![Flow Chart](https://app.code2flow.com/JG4Lgh6rOKdA.png)](https://app.code2flow.com/JG4Lgh6rOKdA)
-
-## Sequence Diagram
-
-[![Sequence Diagram](https://user-images.githubusercontent.com/134455/116138683-207ee800-a6a3-11eb-960c-aa2d1db1f62c.png)](https://sequencediagram.org/index.html?presentationMode=readOnly#initialData=C4S2BsFMAIAUFcBG4QGcAWIB2BzaBlAewDNgB3AQwCdIAoWigY2EKugAl4BbCrWgEwrAKiCqhgAiWFUIArSM2gAlSAAdCE6GLgz5zWsUJZhZSKkJdIAVnMp+0YgEYAzFegBhKhVIGjJsxbWtiD2xFYi0FJIKBjKahpaqHDRaOi+xhSm5pY2hHYOrgAckQCCVKDETMA6hABuIZBUADpYABQA4mCciAA00O3u+H2QwIwAdACULVjQADwAvNCOmtplFVWo6f7ZQXkhBVaIkQAq1DgjqC2tWKpcfaoAnqogw6OT09AAfIsADCtJpyo52Am0MGSygVy+WIABZiIxIgB5YDoRocbi8f7QEqqVQyWqNeicHhYAC0n2kcgUwAAXABJLCoYTgcAeOkAencABFoKgHkzIFwxrRibxyZS9LSGUyKCzoAADMaMLykMYPLjgRUijFkim6an0xnM1mdYDdbHMEBGFryqpWsl4tTUSCkmhQMSQeXQYVYQjAGB1NGirA044gSwOVhaaAtN2QD0AQmggF4NwBFe9qSeL9cwaQBZXjwWXgB7QYBUEA4c7NLC2y1GUmO1TO12Qd3ieW0X3+6CBtgS6k9TzeWm10D1xvNuMe+UtfiEMy84DwYjEaDwVDYPBD0hXeoUBU3LjQbAyuXK4fyia0fvMcnb2lKeAzeXn0jQCc0LU34CzUn3mmePG3ZTuI0CIF4WCMOgwr3uKKQYABNBCDAaCoPAkA+n6AYEn22a0rm8ZYGQmBQH07gcty3pjMK37kq0zgTGsICVMwqA0gAQvAIDgPY5ikJQND3Ou6BaOUzEbJh3a9tiuL4o0NIAOroCWqIsoQpaooJ0yQGQx6oGhKEzCikAtKo8EiTQ6hJoAfBuAOi7tA4nivZwcgqQ0o5xYKkwjBqP6-BeuAIitqW6moehknYWiCCuQhAAyQWspABLGKW5aVo0lw1mZMXoF6dpGJ2WE9jhyQ5YOKq0gAcoQunytlMS5VodZYLO85JEyy6ruum4eBVu4gPu8pzowADW8nsk07LAuIxhUA87KvsAM4zK0e4KtNkCzfNi0AAI8AKVB5c1UxYFe0UNXeFU0o+z6Le+5larBnytI4EzftdrbxqB4G8FBAD8154XRr3-iobYwD9kHoAmtBPS9b14QBFE8lBCgjUkTb6QDtHPSDV3kZyKOoqNGNiKgMNw69TEsSC9LQIwvDQOgFAAF6iesrEA9TGzAxM-4AJqEPA9OM8zbPUBzIIw12kVsP+sUjAA5EkOCEBTFXkoC000udqTs+JrEhaWZwXNAKBjdAh49LDGufFrFw0tRYzvk8Lw28Omsm7TTvQCM4yFVJJX3j09u03Sq77sIQIjA4FDcUkTvu6QLkNTS0AAKqqII3ZhYZvJJY0srQJQ-LCsGKdudAXKQIg8B4JU3HwDQwqOXJVAVwhcQULinm1j5qh+QFCVG7nNHmZdw7XU+CqLV69V6xQOBx1gMG26HbEqGWJbzxgPUSwbwCtKgEyRmwDdQPYUfAkfJ9GMWEXFWiwfr+5cpckYkDqx7FLmWn7jgIQUCo8A6y3RCSGkyZADBOyAx+bBW69ggZAoAA)
+```mermaid
+flowchart TD
+    A[Developer triggers release workflow] --> B["SDK Repo: craft prepare"]
+    B --> C[Build artifacts & create release branch]
+    C --> D[Upload artifacts to GitHub]
+    D --> E["Create issue in getsentry/publish"]
+    E --> F{Release Manager Review}
+    F -->|"Add 'accepted' label"| G[Publish workflow triggers]
+    F -->|"Comment '#retract'"| H[Issue closed - retracted]
+    G --> I[Download artifacts from GitHub]
+    I --> J["craft publish to registries"]
+    J --> K{Publish successful?}
+    K -->|Yes| L[Issue closed - success]
+    K -->|No| M[Issue updated with failure]
+```
 
 ## Goals
 
- 1. We do not want employees to publish through their own accounts
- 1. We do not want employees to have access to the global credentials
- 1. We do not want employees to build and publish releases from their machines
- 1. We want releases to require formal approvals from a limited set of release managers
- 1. We want all the above to not discourage from any engineer initiating a release
+1.  We do not want employees to publish through their own accounts
+1.  We do not want employees to have access to the global credentials
+1.  We do not want employees to build and publish releases from their machines
+1.  We want releases to require formal approvals from a limited set of release managers
+1.  We want all the above to not discourage from any engineer initiating a release
 
 ## Usage
 
@@ -40,11 +50,11 @@ This is a meta/control repository that implements the [Central Publish Repositor
 By default, all releases will be merged to the default branch of your repository (usually `master` or `main`). If you want to be able to override this behavior, you need to perform additional steps listed below:
 
 1. Update `.github/workflows/release.yml` by adding code below to `on.workflow_dispatch.inputs` block:
-    ```yaml
-    merge_target:
-      description: Target branch to merge into. Uses the default branch as a fallback (optional)
-      required: false
-    ```
+   ```yaml
+   merge_target:
+     description: Target branch to merge into. Uses the default branch as a fallback (optional)
+     required: false
+   ```
 1. In the same file, add `merge_target: ${{ github.event.inputs.merge_target }}` under the `with` block of the `Prepare release` step
 
 ## Retracting Release Request
@@ -54,10 +64,10 @@ The only person that can do retract a release, is the same person that initially
 
 ## Approvals
 
-Packages we release into the wider world that our customers install, require an explicit approval.  This for instance applies to
-`sentry-cli`, our SDKs or the `symbolicator` distributed utilities.  Internal dependencies such as `arroyo` can be published
-with an auto approval.  The reasoning here is that the bump of the dependency requires an explicit approval again in Sentry
-proper.  In theory if an independent package gets sufficient independent use of Sentry we might want to reconsider an auto
+Packages we release into the wider world that our customers install, require an explicit approval. This for instance applies to
+`sentry-cli`, our SDKs or the `symbolicator` distributed utilities. Internal dependencies such as `arroyo` can be published
+with an auto approval. The reasoning here is that the bump of the dependency requires an explicit approval again in Sentry
+proper. In theory if an independent package gets sufficient independent use of Sentry we might want to reconsider an auto
 approval process for such package as it might become an interesting target for an attacker.
 
 Automatic approvals are managed in the [`auto-approve.yml`](https://github.com/getsentry/publish/blob/main/.github/workflows/auto-approve.yml) workflow.

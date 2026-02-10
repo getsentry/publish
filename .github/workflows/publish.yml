@@ -2,6 +2,11 @@ name: Publish
 on:
   issues:
     types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest

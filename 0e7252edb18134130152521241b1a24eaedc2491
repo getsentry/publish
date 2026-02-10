@@ -1,0 +1,18 @@
+Implementation Plan: Remove #retract command
+
+Files deleted:
+1. src/modules/retract-release.js - Core retract logic (posts comment, closes issue)
+2. src/publish/retract.js - GitHub Actions entry point for retract
+3. src/modules/__tests__/retract-release.js - Tests for retract-release module
+4. .github/workflows/retract.yml - Workflow triggered by #retract comments on issues
+
+Files edited:
+5. README.md - Removed #retract branch from the Mermaid flowchart and the
+   entire "Retracting Release Request" documentation section (lines 60-63)
+6. src/modules/__tests__/update-issue.js - Removed the #retract instruction
+   line from two test fixture strings that included issue body templates
+
+Verification:
+- All 16 tests pass (yarn test)
+- Lint clean (yarn lint)
+- Prettier clean (yarn prettier)

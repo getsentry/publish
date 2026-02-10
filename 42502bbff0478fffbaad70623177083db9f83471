@@ -1,0 +1,5 @@
+## Plan
+
+The auto-approve workflow was failing because GH_TOKEN was empty — the GH_SENTRY_BOT_PAT secret is missing/expired/revoked.
+
+Fix: Replace the PAT-based auth with a GitHub App token generated via actions/create-github-app-token@v2.2.1, using vars.SENTRY_RELEASE_BOT_CLIENT_ID and secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY. This is the same pattern used by other repos in the org (e.g. sentry-api-schema). GitHub App tokens, unlike GITHUB_TOKEN, do trigger downstream workflow runs — which is required here since the accepted label triggers publish workflows.

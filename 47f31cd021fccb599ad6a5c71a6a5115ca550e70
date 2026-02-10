@@ -1,0 +1,27 @@
+## Implementation Plan
+
+### Problem
+The auto-approve workflow had a 40+ line if-condition with one
+startsWith() check per repo. Adding a repo meant editing workflow YAML.
+
+### Approach Considered
+1. Plain text file + checkout (chosen)
+2. YAML/JSON config file (overkill — no metadata needed)
+3. JS module in src/ (adds complexity for a simple list match)
+4. GitHub repo variable (loses version control / PR review)
+5. Inline YAML env var (still a long list in the workflow)
+
+### Design Decisions
+- Plain text file: simplest format, easiest to review in PRs, one-line
+  diffs when adding repos.
+- Sparse checkout: only fetches auto-approve-repos.txt, near-instant.
+- Job-level gate: actor check + startsWith('publish: ') skips the job
+  entirely for unrelated issues — no checkout or token wasted.
+- sed + grep -qxF: extracts repo from title, exact full-line match
+  with fixed strings prevents substring false positives.
+- Env var for title: prevents shell injection from crafted titles
+  (security improvement over inline ${{ }} interpolation).
+
+### Maintenance
+To add a new repo: append a line to auto-approve-repos.txt. No
+workflow YAML editing needed.

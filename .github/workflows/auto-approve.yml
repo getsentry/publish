@@ -2,6 +2,10 @@ name: auto-approve non-sdks
 on:
   issues:
     types: [opened]
+
+permissions:
+  contents: read
+
 jobs:
   auto-approve:
     runs-on: ubuntu-latest

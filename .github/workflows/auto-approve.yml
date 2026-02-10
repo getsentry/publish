@@ -43,7 +43,7 @@ jobs:
         startsWith(github.event.issue.title, 'publish: getsentry/status-page-list@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/streams/sentry_streams@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/symbolic@') ||
-        startsWith(github.event.issue.title, 'publish: getsentry/taskbroker-client@') ||
+        startsWith(github.event.issue.title, 'publish: getsentry/taskbroker/clients@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/usage-accountant@') ||
         startsWith(github.event.issue.title, 'publish: getsentry/watto@') ||
         false

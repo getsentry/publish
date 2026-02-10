@@ -1,0 +1,26 @@
+Implementation Plan
+===================
+
+All 3 open CodeQL code-scanning alerts share the same rule:
+actions/missing-workflow-permissions (medium severity, CWE-275).
+
+Without explicit permissions, workflows inherit the repository/org default
+GITHUB_TOKEN scopes which may be overly broad (read-write prior to Feb 2023).
+
+Fixes:
+
+1. .github/workflows/test.yml (Alert #6)
+   - Only checks out code, caches deps, and runs tests.
+   - Permissions needed: contents: read
+
+2. .github/workflows/publish.yml (Alert #5)
+   - Checks out this repo, writes issue comments, adds/removes labels,
+     and closes issues via GITHUB_TOKEN. Cross-repo operations use the
+     Release Bot app token so they do not require additional scopes.
+   - Permissions needed: contents: read, issues: write
+
+3. .github/workflows/auto-approve.yml (Alert #2)
+   - Currently uses only the Release Bot app token (not GITHUB_TOKEN),
+     but PR #7119 adds an actions/checkout step (sparse checkout) which
+     requires contents: read.
+   - Permissions needed: contents: read

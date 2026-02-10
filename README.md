@@ -16,7 +16,6 @@ flowchart TD
     D --> E["Create issue in getsentry/publish"]
     E --> F{Release Manager Review}
     F -->|"Add 'accepted' label"| G[Publish workflow triggers]
-    F -->|"Comment '#retract'"| H[Issue closed - retracted]
     G --> I[Download artifacts from GitHub]
     I --> J["craft publish to registries"]
     J --> K{Publish successful?}
@@ -56,11 +55,6 @@ By default, all releases will be merged to the default branch of your repository
      required: false
    ```
 1. In the same file, add `merge_target: ${{ github.event.inputs.merge_target }}` under the `with` block of the `Prepare release` step
-
-## Retracting Release Request
-
-To retract a release request, comment `#retract` (as the only comment content) under the request you want to retract.
-The only person that can do retract a release, is the same person that initially requested it and is listed in the request description.
 
 ## Approvals
 

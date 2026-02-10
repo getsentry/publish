@@ -49,7 +49,12 @@ jobs:
         false
       )
     steps:
+      - name: Get auth token
+        id: token
+        uses: actions/create-github-app-token@v2.2.1
+        with:
+          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
       - run: gh issue edit ${{ github.event.issue.html_url }} --add-label accepted
         env:
-          # can't use `GITHUB_TOKEN` because we need to trigger actions
-          GH_TOKEN: ${{ secrets.GH_SENTRY_BOT_PAT }}
+          GH_TOKEN: ${{ steps.token.outputs.token }}

@@ -62,12 +62,12 @@ jobs:
           echo 'taking craft config from branch ${{ fromJSON(steps.inputs.outputs.result).merge_target }} in ${{ fromJSON(steps.inputs.outputs.result).repo }}'
           echo 'target_repo_branch=${{ fromJSON(steps.inputs.outputs.result).merge_target }}' >> "$GITHUB_OUTPUT"
 
-      - name: Get Release Bot auth token
+      - name: Get auth token
         id: token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
         with:
-          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
           owner: getsentry # create token that have access to all repos
 
       - uses: actions/checkout@v6
@@ -110,7 +110,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.token.outputs.token }}
           # We need to use separate tokens for GHCR.IO and GitHub API access
           # Because we can only access ghcr.io with GITHUB_TOKEN but that token
-          # cannot do other cross-repo operations like our Release Bot App
+          # cannot do other cross-repo operations like our Internal App
           # Thanks GitHub
           DOCKER_GHCR_IO_USERNAME: x-access-token # for ghcr.io auth
           DOCKER_GHCR_IO_PASSWORD: ${{ secrets.GITHUB_TOKEN }} # for ghcr.io auth

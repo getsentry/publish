@@ -4,7 +4,7 @@ This is a meta/control repository that implements the [Central Publish Repositor
 
 ## Quick Start
 
-[craft quick start](https://develop.sentry.dev/sdk/craft-quick-start/)
+[craft quick start](https://craft.sentry.dev/github-actions/)
 
 ## Release Flow
 
@@ -41,20 +41,44 @@ flowchart TD
 
 ## CalVer
 
-1. You need to add `calver: true` under the `with` block of the `Prepare release` step to enable automatic version determination
-1. You also need to add your repository to the list in the [`calver workflow`](https://github.com/getsentry/publish/blob/main/.github/workflows/calver.yml#L9-L13)
+To enable calendar versioning, add the following to your `.craft.yml`:
+
+```yaml
+versioning:
+  policy: calver
+  calver:
+    format: "%y.%-m" # e.g., 24.12 for December 2024
+    offset: 14 # Days to look back for date calculation (optional)
+```
+
+See the [Craft CalVer documentation](https://craft.sentry.dev/configuration/#calendar-versioning-calver) for more details.
 
 ## Merge Target
 
-By default, all releases will be merged to the default branch of your repository (usually `master` or `main`). If you want to be able to override this behavior, you need to perform additional steps listed below:
+By default, all releases will be merged to the default branch of your repository (usually `master` or `main`). If you want to override this, pass the `merge_target` input in your release workflow. For example, using [Craft's reusable workflow](https://craft.sentry.dev/github-actions/#option-1-reusable-workflow-recommended):
 
-1. Update `.github/workflows/release.yml` by adding code below to `on.workflow_dispatch.inputs` block:
-   ```yaml
-   merge_target:
-     description: Target branch to merge into. Uses the default branch as a fallback (optional)
-     required: false
-   ```
-1. In the same file, add `merge_target: ${{ github.event.inputs.merge_target }}` under the `with` block of the `Prepare release` step
+```yaml
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release
+        required: false
+      merge_target:
+        description: Target branch to merge into (optional)
+        required: false
+
+jobs:
+  release:
+    uses: getsentry/craft/.github/workflows/release.yml@v2
+    with:
+      version: ${{ inputs.version }}
+      merge_target: ${{ inputs.merge_target }}
+    secrets: inherit
+```
+
+The same `merge_target` input is also available when using the [Craft composite action](https://craft.sentry.dev/github-actions/#option-2-composite-action) directly.
 
 ## Approvals
 
@@ -72,4 +96,4 @@ The system uses [Craft](https://github.com/getsentry/craft) under the hood to pr
 
 This repo is read-only for everyone except for release managers. This is because all sensitive secrets such as admin-level GitHub access tokens or package repository publishing tokens (npm, PyPI, cargo, etc.) are defined in this repository as secrets and anyone with write access can create or trigger an arbitrary GitHub action workflow, exposing these secrets without any indication. See getsentry/sentry#21930 for an example.
 
-Due to the same reason above, [action-prepare-release](https://github.com/getsentry/action-prepare-release/) also utilizes tokens from Sentry Release Bot. This is to automatically create publish request issues from the action. We cannot use `GITHUB_TOKEN` for these actions as [GitHub prevents triggering more workflows via this token](https://docs.github.com/en/actions/reference/events-that-trigger-workflows).
+Due to the same reason above, [Craft's GitHub Actions](https://craft.sentry.dev/github-actions/) (which replace the now-deprecated `action-prepare-release`) also utilize tokens from Sentry Release Bot. This is to automatically create publish request issues from the action. We cannot use `GITHUB_TOKEN` for these actions as [GitHub prevents triggering more workflows via this token](https://docs.github.com/en/actions/reference/events-that-trigger-workflows).

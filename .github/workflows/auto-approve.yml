@@ -10,7 +10,7 @@ jobs:
   auto-approve:
     runs-on: ubuntu-latest
     if: |
-      github.actor == 'sentry-release-bot[bot]' &&
+      (github.actor == 'sentry-release-bot[bot]' || github.actor == 'getsantry[bot]') &&
       startsWith(github.event.issue.title, 'publish: ')
     steps:
       - uses: actions/checkout@v4
@@ -21,8 +21,8 @@ jobs:
         id: token
         uses: actions/create-github-app-token@v2.2.1
         with:
-          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
       - name: Auto-approve if repo is in the list
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}

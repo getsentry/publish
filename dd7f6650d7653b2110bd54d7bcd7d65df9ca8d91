@@ -1,0 +1,31 @@
+## Implementation Plan
+
+### Goal
+Replace all SENTRY_RELEASE_BOT variable/secret references with SENTRY_INTERNAL_APP,
+which has the necessary permissions on this repo for auto-approve functionality.
+
+### Changes Made
+
+#### .github/workflows/auto-approve.yml
+- Actor check: Added getsantry[bot] alongside sentry-release-bot[bot] (OR condition)
+- vars.SENTRY_RELEASE_BOT_CLIENT_ID → vars.SENTRY_INTERNAL_APP_ID
+- secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY → secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY
+
+#### .github/workflows/publish.yml
+- Step name: "Get Release Bot auth token" → "Get auth token"
+- vars.SENTRY_RELEASE_BOT_CLIENT_ID → vars.SENTRY_INTERNAL_APP_ID
+- secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY → secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY
+- Comment: "Release Bot App" → "Internal App"
+
+#### README.md
+- Updated variable name references in prose to SENTRY_INTERNAL_APP_ID / SENTRY_INTERNAL_APP_PRIVATE_KEY
+- Updated "Sentry Release Bot" → "the Sentry Internal App" in action-prepare-release context
+
+### Preserved (intentionally not changed)
+- sentry-release-bot[bot] actor name kept in the OR condition (larger migration needed)
+- [Sentry Release Bot](https://github.com/apps/sentry-release-bot) link in README preserved
+
+### Prerequisites
+- Org-level variable SENTRY_INTERNAL_APP_ID and secret SENTRY_INTERNAL_APP_PRIVATE_KEY
+  are already configured.
+- The internal app actor name is getsantry[bot] (GitHub App slug: getsantry).

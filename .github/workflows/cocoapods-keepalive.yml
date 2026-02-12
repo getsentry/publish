@@ -21,5 +21,7 @@ jobs:
     steps:
       - name: Install CocoaPods
         run: gem install cocoapods
+      - name: Print CocoaPods Version
+        run: pod --version
       - name: Refresh CocoaPods Session
         run: pod trunk me > /dev/null 2>&1

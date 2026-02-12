@@ -15,6 +15,7 @@ jobs:
   keepalive:
     name: Refresh CocoaPods Session
     runs-on: macos-15
+    environment: production
     env:
       COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
 

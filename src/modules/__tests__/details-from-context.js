@@ -41,7 +41,6 @@ test("parse inputs", async () => {
     merge_target: "custom-branch",
     path: ".",
     repo: "sentry",
-    requester: "BYK",
     targets: ["github", "npm[@sentry/node]", "docker[latest]"],
     version: "21.3.1",
   });
@@ -97,7 +96,6 @@ test("Do not extract merge_target value if its a default value", async () => {
     merge_target: "",
     path: ".",
     repo: "sentry",
-    requester: "BYK",
     targets: ["github", "docker[latest]"],
     version: "21.3.1",
   });

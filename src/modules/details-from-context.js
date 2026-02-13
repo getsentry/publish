@@ -1,7 +1,8 @@
 /**
  * Matches the entire "Targets" section of a github publish issue body.
  */
-const TARGETS_SECTION_PARSER_REGEX = /^(?!### Targets$\s)(?: *- \[[ xX]\] \S+\s*$(?:\r?\n)?)+/m;
+const TARGETS_SECTION_PARSER_REGEX =
+  /^(?!### Targets$\s)(?: *- \[[ xX]\] \S+\s*$(?:\r?\n)?)+/m;
 
 /**
  * Matches all targets of a github publish issue body in a section that was already matched and extracted with `TARGETS_PARSER_REGEX`.
@@ -15,27 +16,18 @@ const TARGETS_PARSER_REGEX = /^\s*- \[[ x]\] (\S+)/gim;
  */
 const CHECKED_TARGETS_PARSER_REGEX = /^\s*- \[x\] (\S+)/gim;
 
-
 async function detailsFromContext({ context }) {
   if (!context || !context.payload || !context.payload.issue) {
-    throw new Error('Issue context is not defined');
+    throw new Error("Issue context is not defined");
   }
 
-  const titleParser = /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./-]+)?@(?<version>[\w.+-]+)$/;
+  const titleParser =
+    /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./-]+)?@(?<version>[\w.+-]+)$/;
   const titleMatch = context.payload.issue.title.match(titleParser).groups;
   const dry_run = context.payload.issue.labels.some((l) => l.name === "dry-run")
     ? "1"
     : "";
   const path = "." + (titleMatch.path || "");
-
-  // - May only contain alphanumeric characters and hyphens.
-  // - Cannot have multiple consecutive hyphens.
-  // - Cannot begin or end with a hyphen.
-  // - Maximum 39 characters.
-  const requesterParser = /^Requested by: @(?<requester>[a-zA-Z\d](?:[a-zA-Z\d]|-(?=[a-zA-Z\d])){0,38})$/m;
-  const { requester } = context.payload.issue.body.match(
-    requesterParser
-  ).groups;
 
   // https://docs.github.com/en/get-started/using-git/dealing-with-special-characters-in-branch-and-tag-names#naming-branches-and-tags
   const mergeTargetParser = /^Merge target: (?<merge_target>[\w.\-/]+)$/m;
@@ -45,7 +37,9 @@ async function detailsFromContext({ context }) {
     merge_target = mergeTargetMatch.groups.merge_target || "";
   }
 
-  const targetsMatch = context.payload.issue.body.match(TARGETS_SECTION_PARSER_REGEX);
+  const targetsMatch = context.payload.issue.body.match(
+    TARGETS_SECTION_PARSER_REGEX
+  );
   let targets;
   if (targetsMatch) {
     targets = Array.from(
@@ -58,7 +52,6 @@ async function detailsFromContext({ context }) {
     dry_run,
     merge_target,
     path,
-    requester,
     targets,
   };
 }

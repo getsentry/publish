@@ -6,6 +6,7 @@ on:
 permissions:
   contents: read
   issues: write
+  packages: write
 
 jobs:
   publish:

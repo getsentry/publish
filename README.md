@@ -16,6 +16,7 @@ flowchart TD
     D --> E["Create issue in getsentry/publish"]
     E --> F{Release Manager Review}
     F -->|"Add 'accepted' label"| G[Publish workflow triggers]
+    F -->|"Comment '#retract'"| H[Issue closed - retracted]
     G --> I[Download artifacts from GitHub]
     I --> J["craft publish to registries"]
     J --> K{Publish successful?}
@@ -79,6 +80,11 @@ jobs:
 ```
 
 The same `merge_target` input is also available when using the [Craft composite action](https://craft.sentry.dev/github-actions/#option-2-composite-action) directly.
+
+## Retracting Release Request
+
+To retract a release request, comment `#retract` (as the only comment content) under the request you want to retract.
+The only person that can do retract a release, is the same person that initially requested it and is listed in the request description.
 
 ## Approvals
 

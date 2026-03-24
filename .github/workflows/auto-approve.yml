@@ -13,13 +13,13 @@ jobs:
       (github.actor == 'sentry-release-bot[bot]' || github.actor == 'getsantry[bot]') &&
       startsWith(github.event.issue.title, 'publish: ')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           sparse-checkout: auto-approve-repos.txt
           sparse-checkout-cone-mode: false
       - name: Get auth token
         id: token
-        uses: actions/create-github-app-token@v2.2.1
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         with:
           app-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}

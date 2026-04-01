@@ -18,8 +18,9 @@ jobs:
     environment: production
     name: Publish a new version
     if: >-
-      (github.event.label.name == 'accepted' || github.event.label.name == 'ci-ready')
-      && github.event.issue.state == 'open'
+      github.event.issue.state == 'open'
+      && contains(github.event.issue.labels.*.name, 'accepted')
+      && (github.event.label.name == 'accepted' || github.event.label.name == 'ci-ready')
     timeout-minutes: 90
     env:
       SENTRY_DSN: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838"

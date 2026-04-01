@@ -128,7 +128,7 @@ jobs:
             -c "
             export HOME=/root &&
             cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }} &&
-            exec craft publish ${{ fromJSON(steps.inputs.outputs.result).version }} ${{ contains(github.event.issue.labels.*.name, 'ci-ready') && '--no-status-check' || '' }}
+            exec craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}
             "
         env:
           CRAFT_MERGE_TARGET: ${{ fromJSON(steps.inputs.outputs.result).merge_target }}

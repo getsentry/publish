@@ -63,8 +63,11 @@ jobs:
             exit 0
           fi
 
+          has_accepted=$(echo "$issue" | jq '[.labels[].name] | any(. == "accepted")')
+
           echo "number=${number}" >> "$GITHUB_OUTPUT"
-          echo "Found issue #${number} with ci-pending label"
+          echo "has_accepted=${has_accepted}" >> "$GITHUB_OUTPUT"
+          echo "Found issue #${number} with ci-pending label (accepted=${has_accepted})"
 
       # Use a GitHub App token so the label change triggers publish.yml.
       # GITHUB_TOKEN events are deliberately suppressed by GitHub and
@@ -89,5 +92,9 @@ jobs:
             --remove-label "ci-pending" \
             --add-label "ci-ready"
 
-          gh issue comment "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" \
-            --body "CI checks passed for ${REPO} (\`${SHA:0:8}\`). Publishing will start once the **accepted** label is also present."
+          if [[ "${{ steps.find-issue.outputs.has_accepted }}" == "true" ]]; then
+            comment="CI checks passed for ${REPO} (\`${SHA:0:8}\`). Publishing is starting now."
+          else
+            comment="CI checks passed for ${REPO} (\`${SHA:0:8}\`). Publishing will start once the **accepted** label is also present."
+          fi
+          gh issue comment "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --body "$comment"

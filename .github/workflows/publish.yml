@@ -4,7 +4,9 @@ on:
     types: [labeled]
 
 concurrency:
-  group: publish-${{ github.event.issue.number }}
+  # Use the issue title (e.g. "publish: getsentry/foo@1.2.3") so duplicate
+  # issues for the same repo@version share a concurrency group.
+  group: ${{ github.event.issue.title }}
   cancel-in-progress: false
 
 permissions:

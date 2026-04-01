@@ -11,7 +11,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   signal:
@@ -27,9 +26,11 @@ jobs:
           title="publish: ${REPO}@${VERSION}"
           echo "Looking for issue: ${title}"
 
-          # Find matching open issue by exact title match
+          # Find matching open issue by exact title match.
+          # Use --limit 200 to handle active repos with many open issues.
           issue=$(gh issue list -R "$GITHUB_REPOSITORY" \
             --state open \
+            --limit 200 \
             --json number,title,labels \
             | jq -r --arg t "$title" \
               '[.[] | select(.title == $t)] | first // empty')
@@ -41,6 +42,7 @@ jobs:
               sleep 10
               issue=$(gh issue list -R "$GITHUB_REPOSITORY" \
                 --state open \
+                --limit 200 \
                 --json number,title,labels \
                 | jq -r --arg t "$title" \
                   '[.[] | select(.title == $t)] | first // empty')
@@ -64,9 +66,21 @@ jobs:
           echo "number=${number}" >> "$GITHUB_OUTPUT"
           echo "Found issue #${number} with ci-pending label"
 
+      # Use a GitHub App token so the label change triggers publish.yml.
+      # GITHUB_TOKEN events are deliberately suppressed by GitHub and
+      # would not create new workflow runs.
+      - name: Get auth token
+        if: steps.find-issue.outputs.number
+        id: token
+        uses: actions/create-github-app-token@v2.2.1
+        with:
+          app-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+
       - name: Add ci-ready label
         if: steps.find-issue.outputs.number
         env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
           ISSUE_NUMBER: ${{ steps.find-issue.outputs.number }}
           SHA: ${{ github.event.client_payload.sha }}
           REPO: ${{ github.event.client_payload.repo }}

@@ -13,13 +13,33 @@ permissions:
   packages: write
 
 jobs:
+  # Lightweight job: comment when approved but CI hasn't finished yet
+  waiting-for-ci:
+    runs-on: ubuntu-latest
+    name: Waiting for CI
+    if: >-
+      github.event.label.name == 'accepted'
+      && github.event.issue.state == 'open'
+      && contains(github.event.issue.labels.*.name, 'ci-pending')
+    steps:
+      - name: Comment on issue
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "Approved, but CI is still running on the release branch. Publishing will start automatically when CI passes."
+
   publish:
     runs-on: ubuntu-latest
     environment: production
     name: Publish a new version
+    # Run when:
+    #   - accepted (with no ci-pending blocking), OR
+    #   - ci-ready added (and accepted is already present)
+    # In all cases accepted must be present and ci-pending must not be.
     if: >-
       github.event.issue.state == 'open'
       && contains(github.event.issue.labels.*.name, 'accepted')
+      && !contains(github.event.issue.labels.*.name, 'ci-pending')
       && (github.event.label.name == 'accepted' || github.event.label.name == 'ci-ready')
     timeout-minutes: 90
     env:
@@ -78,49 +98,9 @@ jobs:
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
           owner: getsentry # create token that have access to all repos
 
-      - name: Check publish readiness
-        id: gate
-        run: |
-          issue_number=${{ github.event.issue.number }}
-          labels=$(gh issue view "$issue_number" -R "$GITHUB_REPOSITORY" --json labels -q '.labels[].name')
-
-          has_accepted=$(echo "$labels" | grep -c '^accepted$' || true)
-          has_ci_pending=$(echo "$labels" | grep -c '^ci-pending$' || true)
-          has_ci_ready=$(echo "$labels" | grep -c '^ci-ready$' || true)
-
-          # Determine if this repo uses the ci-ready flow
-          uses_ci_ready=false
-          if [[ "$has_ci_pending" -gt 0 || "$has_ci_ready" -gt 0 ]]; then
-            uses_ci_ready=true
-          fi
-
-          should_publish=false
-          skip_status_check=false
-
-          if [[ "$has_accepted" -gt 0 ]]; then
-            if [[ "$uses_ci_ready" == "false" ]]; then
-              # Old-style repo: accepted is sufficient, craft will poll CI
-              should_publish=true
-            elif [[ "$has_ci_ready" -gt 0 ]]; then
-              # New-style repo: both conditions met, skip polling
-              should_publish=true
-              skip_status_check=true
-            else
-              # New-style repo: accepted but CI not ready yet
-              gh issue comment "$issue_number" -R "$GITHUB_REPOSITORY" \
-                --body "Approved, but CI is still running on the release branch. Publishing will start automatically when CI passes."
-            fi
-          elif [[ "$has_ci_ready" -gt 0 ]]; then
-            # CI ready but not yet approved — nothing to do
-            echo "CI ready, waiting for accepted label."
-          fi
-
-          echo "should_publish=${should_publish}" >> "$GITHUB_OUTPUT"
-          echo "skip_status_check=${skip_status_check}" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@v6
         name: Check out target repo
-        if: steps.gate.outputs.should_publish == 'true' && steps.inputs.outputs.result
+        if: ${{ steps.inputs.outputs.result }}
         with:
           path: __repo__
           ref: ${{ steps.target-repo-branch.outputs.target_repo_branch || ''}}
@@ -130,7 +110,7 @@ jobs:
 
       - name: Set targets
         shell: bash
-        if: steps.gate.outputs.should_publish == 'true' && fromJSON(steps.inputs.outputs.result).targets
+        if: fromJSON(steps.inputs.outputs.result).targets
         run: >
           jq -n --argjson
           source '${{ toJSON(fromJSON(steps.inputs.outputs.result).targets) }}'
@@ -139,7 +119,6 @@ jobs:
 
       - uses: docker://getsentry/craft:latest
         name: Publish using Craft
-        if: steps.gate.outputs.should_publish == 'true'
         with:
           entrypoint: /bin/bash
           args: >-
@@ -147,7 +126,7 @@ jobs:
             -c "
             export HOME=/root &&
             cd __repo__/${{ fromJSON(steps.inputs.outputs.result).path }} &&
-            exec craft publish ${{ fromJSON(steps.inputs.outputs.result).version }} ${{ steps.gate.outputs.skip_status_check == 'true' && '--no-status-check' || '' }}
+            exec craft publish ${{ fromJSON(steps.inputs.outputs.result).version }} ${{ contains(github.event.issue.labels.*.name, 'ci-ready') && '--no-status-check' || '' }}
             "
         env:
           CRAFT_MERGE_TARGET: ${{ fromJSON(steps.inputs.outputs.result).merge_target }}
@@ -186,28 +165,28 @@ jobs:
           PUBDEV_REFRESH_TOKEN: ${{ secrets.PUBDEV_REFRESH_TOKEN }}
 
       - name: Update completed targets and remove label
-        if: steps.gate.outputs.should_publish == 'true' && (cancelled() || failure())
+        if: ${{ cancelled() || failure() }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/update-issue.js
 
       - name: Inform about cancellation
-        if: steps.gate.outputs.should_publish == 'true' && cancelled()
+        if: ${{ cancelled() }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/post-result.js cancelled
 
       - name: Inform about failure
-        if: steps.gate.outputs.should_publish == 'true' && failure()
+        if: ${{ failure() }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/post-result.js failure
 
       - name: Close on success
-        if: steps.gate.outputs.should_publish == 'true' && success()
+        if: ${{ success() }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

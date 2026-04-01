@@ -23,8 +23,6 @@ jobs:
       && contains(github.event.issue.labels.*.name, 'ci-pending')
     steps:
       - name: Comment on issue
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue comment "${{ github.event.issue.number }}" \
             -R "$GITHUB_REPOSITORY" \

@@ -21,7 +21,6 @@ jobs:
       - name: Find matching publish issue
         id: find-issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.event.client_payload.repo }}
           VERSION: ${{ github.event.client_payload.version }}
         run: |
@@ -85,6 +84,9 @@ jobs:
       - name: Add ci-ready label
         if: steps.find-issue.outputs.number
         env:
+          # Override the default GITHUB_TOKEN with the app token so the
+          # label event triggers publish.yml (GITHUB_TOKEN events are
+          # suppressed by GitHub and would not start new workflow runs).
           GH_TOKEN: ${{ steps.token.outputs.token }}
           ISSUE_NUMBER: ${{ steps.find-issue.outputs.number }}
           SHA: ${{ github.event.client_payload.sha }}

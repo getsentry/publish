@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 jobs:
   signal:
@@ -20,6 +21,7 @@ jobs:
       - name: Find matching publish issue
         id: find-issue
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.event.client_payload.repo }}
           VERSION: ${{ github.event.client_payload.version }}
         run: |

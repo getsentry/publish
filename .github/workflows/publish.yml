@@ -79,8 +79,6 @@ jobs:
 
       - name: Check publish readiness
         id: gate
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           issue_number=${{ github.event.issue.number }}
           labels=$(gh issue view "$issue_number" -R "$GITHUB_REPOSITORY" --json labels -q '.labels[].name')

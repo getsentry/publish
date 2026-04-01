@@ -21,7 +21,6 @@ jobs:
       - name: Find matching publish issue
         id: find-issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.event.client_payload.repo }}
           VERSION: ${{ github.event.client_payload.version }}
         run: |
@@ -68,7 +67,6 @@ jobs:
       - name: Add ci-ready label
         if: steps.find-issue.outputs.number
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ steps.find-issue.outputs.number }}
           SHA: ${{ github.event.client_payload.sha }}
           REPO: ${{ github.event.client_payload.repo }}

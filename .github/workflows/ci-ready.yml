@@ -1,0 +1,81 @@
+name: CI Ready Signal
+
+on:
+  repository_dispatch:
+    types: [ci-ready]
+
+# client_payload schema:
+#   repo: "getsentry/sentry-native"   (full owner/repo)
+#   version: "0.13.4"
+#   sha: "abc123..."                   (the release branch HEAD SHA)
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    name: Process CI-ready signal
+    steps:
+      - name: Find matching publish issue
+        id: find-issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.event.client_payload.repo }}
+          VERSION: ${{ github.event.client_payload.version }}
+        run: |
+          title="publish: ${REPO}@${VERSION}"
+          echo "Looking for issue: ${title}"
+
+          # Find matching open issue by exact title match
+          issue=$(gh issue list -R "$GITHUB_REPOSITORY" \
+            --state open \
+            --json number,title,labels \
+            | jq -r --arg t "$title" \
+              '[.[] | select(.title == $t)] | first // empty')
+
+          if [[ -z "$issue" ]]; then
+            # Retry a few times in case the issue hasn't been created yet
+            for i in 1 2 3; do
+              echo "Issue not found, retry ${i}/3 in 10s..."
+              sleep 10
+              issue=$(gh issue list -R "$GITHUB_REPOSITORY" \
+                --state open \
+                --json number,title,labels \
+                | jq -r --arg t "$title" \
+                  '[.[] | select(.title == $t)] | first // empty')
+              if [[ -n "$issue" ]]; then break; fi
+            done
+          fi
+
+          if [[ -z "$issue" ]]; then
+            echo "::warning::No open issue found with title: ${title}"
+            exit 0
+          fi
+
+          number=$(echo "$issue" | jq -r '.number')
+          has_ci_pending=$(echo "$issue" | jq '[.labels[].name] | any(. == "ci-pending")')
+
+          if [[ "$has_ci_pending" != "true" ]]; then
+            echo "::warning::Issue #${number} does not have ci-pending label. Ignoring signal."
+            exit 0
+          fi
+
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+          echo "Found issue #${number} with ci-pending label"
+
+      - name: Add ci-ready label
+        if: steps.find-issue.outputs.number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.find-issue.outputs.number }}
+          SHA: ${{ github.event.client_payload.sha }}
+          REPO: ${{ github.event.client_payload.repo }}
+        run: |
+          gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" \
+            --remove-label "ci-pending" \
+            --add-label "ci-ready"
+
+          gh issue comment "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" \
+            --body "CI checks passed for ${REPO} (\`${SHA:0:8}\`). Publishing will start once the **accepted** label is also present."

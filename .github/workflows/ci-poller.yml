@@ -1,0 +1,156 @@
+name: CI Status Poller
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+  issues: read
+  actions: write
+
+jobs:
+  check-ci:
+    runs-on: ubuntu-latest
+    # Skip entirely (no runner provisioned) when there's nothing to check.
+    # The CI_POLLER_HAS_PENDING variable is set to "true" by ci-pending.yml
+    # and reset to "false" here when all pending issues are resolved.
+    if: vars.CI_POLLER_HAS_PENDING == 'true'
+    concurrency:
+      group: ci-status-poller
+      cancel-in-progress: false
+    steps:
+      - name: Get auth token
+        id: token
+        uses: actions/create-github-app-token@v2.2.1
+        with:
+          app-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+
+      - name: Check CI status for ci-pending issues
+        env:
+          # Use the app token so label changes trigger publish.yml
+          # (GITHUB_TOKEN events are suppressed by GitHub).
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          # Find all open issues with ci-pending label (include body to extract commit SHA)
+          issues=$(gh issue list -R "$GITHUB_REPOSITORY" \
+            --state open \
+            --label ci-pending \
+            --limit 200 \
+            --json number,title,labels,body)
+
+          count=$(echo "$issues" | jq length)
+          if [[ "$count" == "0" ]]; then
+            echo "No ci-pending issues found. Disabling poller."
+            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"
+            exit 0
+          fi
+          echo "Found ${count} ci-pending issue(s)."
+
+          # Check each issue's CI status
+          echo "$issues" | jq -c '.[]' | while read -r issue; do
+            number=$(echo "$issue" | jq -r '.number')
+            title=$(echo "$issue" | jq -r '.title')
+            body=$(echo "$issue" | jq -r '.body')
+            has_accepted=$(echo "$issue" | jq '[.labels[].name] | any(. == "accepted")')
+
+            # Parse repo and version from title: "publish: owner/repo@version"
+            repo=$(echo "$title" | sed -n 's/^publish: \(.*\)@.*/\1/p')
+            version=$(echo "$title" | sed -n 's/^publish: .*@\(.*\)/\1/p')
+
+            if [[ -z "$repo" || -z "$version" ]]; then
+              echo "::warning::Could not parse repo/version from issue #${number}: ${title}"
+              continue
+            fi
+
+            # Extract the commit SHA from the "View check runs" link in the issue body.
+            # The link format is: https://github.com/{owner}/{repo}/commit/{SHA}/checks/
+            # This avoids hard-coding the release branch name, which repos can customize.
+            sha=$(echo "$body" | grep -oP '(?<=commit/)[0-9a-f]{40}(?=/checks)' || true)
+
+            if [[ -z "$sha" ]]; then
+              echo "::warning::Could not extract commit SHA from issue #${number} body, skipping."
+              continue
+            fi
+
+            echo "Checking CI for ${repo}@${version} commit ${sha:0:8} (issue #${number})..."
+
+            # Check combined commit status ("pending" means statuses exist but
+            # some haven't resolved yet; it does NOT mean "no statuses reported")
+            commit_status=$(gh api "repos/${repo}/commits/${sha}/status" \
+              --jq '.state' 2>/dev/null || echo "error")
+            total_statuses=$(gh api "repos/${repo}/commits/${sha}/status" \
+              --jq '.total_count' 2>/dev/null || echo "0")
+
+            if [[ "$commit_status" == "error" ]]; then
+              echo "  Could not fetch commit status for ${repo}@${sha:0:8}, skipping."
+              continue
+            fi
+
+            # Fetch all check runs (paginate to handle repos with >30 checks).
+            # --paginate --jq applies the filter per-page, so we flatten with
+            # '.check_runs[]' and count with a second jq pass.
+            all_checks=$(gh api --paginate "repos/${repo}/commits/${sha}/check-runs" \
+              --jq '.check_runs[]' 2>/dev/null || true)
+
+            total_checks=$(echo "$all_checks" | jq -s 'length')
+            pending_checks=$(echo "$all_checks" | jq -s '[.[] | select(.status != "completed")] | length')
+            # Count checks with non-successful conclusions (failure, cancelled,
+            # timed_out, action_required, stale, startup_failure).
+            # "success", "neutral", and "skipped" are considered passing.
+            unsuccessful_checks=$(echo "$all_checks" | jq -s '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
+
+            echo "  commit_status=${commit_status} (${total_statuses} statuses) pending=${pending_checks} unsuccessful=${unsuccessful_checks} total=${total_checks}"
+
+            # Require at least one check run or one commit status to exist —
+            # otherwise CI hasn't started yet and all counts would be 0.
+            if [[ "$total_checks" == "0" && "$total_statuses" == "0" ]]; then
+              echo "  No check runs or commit statuses found — CI may not have started yet."
+              continue
+            fi
+
+            # CI is ready when:
+            #   - commit status is "success" or no statuses were reported (some
+            #     repos use only check runs, not commit statuses)
+            #   - all check runs are completed (none pending)
+            #   - no check runs have failed
+            status_ok=false
+            if [[ "$commit_status" == "success" ]]; then
+              status_ok=true
+            elif [[ "$total_statuses" == "0" ]]; then
+              # No commit statuses reported — repo uses only check runs
+              status_ok=true
+            fi
+
+            if [[ "$status_ok" == "true" \
+                  && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
+
+              echo "  CI passed! Adding ci-ready label."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --add-label "ci-ready"
+
+              if [[ "$has_accepted" == "true" ]]; then
+                comment="CI checks passed for ${repo}@${version}. Publishing is starting now."
+              else
+                comment="CI checks passed for ${repo}@${version}. Publishing will start once the **accepted** label is also present."
+              fi
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment"
+            fi
+          done
+
+          # Re-check if there are still pending issues; disable poller if none remain.
+          # Note: there's a small race window where ci-pending.yml could set the
+          # variable to "true" right before we set it to "false" here. In that case
+          # the new issue waits at most one cron tick (5 min) — ci-pending.yml will
+          # set the variable again on the next issue:opened event if needed.
+          remaining=$(gh issue list -R "$GITHUB_REPOSITORY" \
+            --state open \
+            --label ci-pending \
+            --limit 1 \
+            --json number -q 'length')
+          if [[ "$remaining" == "0" ]]; then
+            echo "All ci-pending issues resolved. Disabling poller."
+            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"
+          fi

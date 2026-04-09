@@ -1,0 +1,33 @@
+name: Mark new publish issues as CI-pending
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: read
+  actions: write
+
+jobs:
+  mark-pending:
+    runs-on: ubuntu-latest
+    if: "startsWith(github.event.issue.title, 'publish: ')"
+    steps:
+      - name: Get auth token
+        id: token
+        uses: actions/create-github-app-token@v2.2.1
+        with:
+          app-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+
+      - name: Add ci-pending label and enable poller
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --add-label "ci-pending"
+
+          # Enable the cron poller (ci-poller.yml) so it starts checking
+          gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"

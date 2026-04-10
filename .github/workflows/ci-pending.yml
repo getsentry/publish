@@ -7,7 +7,6 @@ on:
 permissions:
   contents: read
   issues: read
-  actions: write
 
 jobs:
   mark-pending:
@@ -33,8 +32,8 @@ jobs:
 
       - name: Enable cron poller
         env:
-          # Use GITHUB_TOKEN (with actions:write) for variable access —
-          # the app token may not have the actions_variables permission.
-          GH_TOKEN: ${{ github.token }}
+          # Use the app token — GITHUB_TOKEN cannot write repo variables
+          # (403 "Resource not accessible by integration").
+          GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
           gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"

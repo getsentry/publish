@@ -7,7 +7,6 @@ on:
 permissions:
   contents: read
   issues: read
-  actions: write
 
 jobs:
   check-ci:
@@ -140,16 +139,16 @@ jobs:
             fi
           done
 
-      # Disable the poller if no ci-pending issues remain. Uses GITHUB_TOKEN
-      # (with actions:write) since the app token may lack actions_variables
-      # permission.
+      # Disable the poller if no ci-pending issues remain.
       # Note: there's a small race window where ci-pending.yml could set the
       # variable to "true" right before we set it to "false" here. In that case
       # the new issue waits at most one cron tick (5 min) — ci-pending.yml will
       # set the variable again on the next issue:opened event if needed.
       - name: Disable poller if no pending issues remain
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Use the app token — GITHUB_TOKEN cannot write repo variables
+          # (403 "Resource not accessible by integration").
+          GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
           remaining=$(gh issue list -R "$GITHUB_REPOSITORY" \
             --state open \

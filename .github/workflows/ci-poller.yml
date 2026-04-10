@@ -28,6 +28,7 @@ jobs:
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
       - name: Check CI status for ci-pending issues
+        id: check
         env:
           # Use the app token so label changes trigger publish.yml
           # (GITHUB_TOKEN events are suppressed by GitHub).
@@ -42,8 +43,7 @@ jobs:
 
           count=$(echo "$issues" | jq length)
           if [[ "$count" == "0" ]]; then
-            echo "No ci-pending issues found. Disabling poller."
-            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"
+            echo "No ci-pending issues found."
             exit 0
           fi
           echo "Found ${count} ci-pending issue(s)."
@@ -140,11 +140,17 @@ jobs:
             fi
           done
 
-          # Re-check if there are still pending issues; disable poller if none remain.
-          # Note: there's a small race window where ci-pending.yml could set the
-          # variable to "true" right before we set it to "false" here. In that case
-          # the new issue waits at most one cron tick (5 min) — ci-pending.yml will
-          # set the variable again on the next issue:opened event if needed.
+      # Disable the poller if no ci-pending issues remain. Uses GITHUB_TOKEN
+      # (with actions:write) since the app token may lack actions_variables
+      # permission.
+      # Note: there's a small race window where ci-pending.yml could set the
+      # variable to "true" right before we set it to "false" here. In that case
+      # the new issue waits at most one cron tick (5 min) — ci-pending.yml will
+      # set the variable again on the next issue:opened event if needed.
+      - name: Disable poller if no pending issues remain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           remaining=$(gh issue list -R "$GITHUB_REPOSITORY" \
             --state open \
             --label ci-pending \

@@ -21,13 +21,20 @@ jobs:
           app-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      - name: Add ci-pending label and enable poller
+      - name: Add ci-pending label
         env:
+          # Use the app token so the label event triggers publish.yml
+          # (GITHUB_TOKEN events are suppressed by GitHub).
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
           gh issue edit "${{ github.event.issue.number }}" \
             -R "$GITHUB_REPOSITORY" \
             --add-label "ci-pending"
 
-          # Enable the cron poller (ci-poller.yml) so it starts checking
+      - name: Enable cron poller
+        env:
+          # Use GITHUB_TOKEN (with actions:write) for variable access —
+          # the app token may not have the actions_variables permission.
+          GH_TOKEN: ${{ github.token }}
+        run: |
           gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"

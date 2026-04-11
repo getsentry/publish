@@ -29,11 +29,3 @@ jobs:
           gh issue edit "${{ github.event.issue.number }}" \
             -R "$GITHUB_REPOSITORY" \
             --add-label "ci-pending"
-
-      - name: Enable cron poller
-        env:
-          # Use the app token — GITHUB_TOKEN cannot write repo variables
-          # (403 "Resource not accessible by integration").
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-        run: |
-          gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"

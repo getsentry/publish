@@ -28,15 +28,6 @@ jobs:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      # Separate app token for writing repo variables — the sentry-internal
-      # app lacks the actions_variables permission.
-      - name: Get poller app token
-        id: poller-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
-          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
-
       - name: Check CI status for ci-pending issues
         env:
           # Use the app token so label changes trigger publish.yml
@@ -183,9 +174,11 @@ jobs:
             fi
           done
 
-      # Check if any ci-pending issues remain (using GITHUB_TOKEN for
-      # read access — the poller app may only have actions_variables).
+      # Cleanup: check if we should disable the poller. Runs even if the
+      # CI check step above failed, so CI_POLLER_HAS_PENDING doesn't get
+      # stuck on "true" permanently.
       - name: Check for remaining pending issues
+        if: always()
         id: remaining
         env:
           GH_TOKEN: ${{ github.token }}
@@ -197,12 +190,22 @@ jobs:
             --json number -q 'length')
           echo "count=${count}" >> "$GITHUB_OUTPUT"
 
+      # Get the poller app token only when we need to disable the variable.
+      # Placed here (after CI check) so a token failure can't block CI checking.
+      - name: Get poller app token
+        if: always() && steps.remaining.outputs.count == '0'
+        id: poller-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
+
       # Disable the poller if no ci-pending issues remain.
       # Race window: ci-pending.yml could set the variable to "true" between
       # our check and our set-to-false. Worst case: the new issue waits one
       # cron tick (5 min). ci-pending.yml will re-enable on the next opened event.
       - name: Disable poller if no pending issues remain
-        if: steps.remaining.outputs.count == '0'
+        if: always() && steps.remaining.outputs.count == '0'
         env:
           GH_TOKEN: ${{ steps.poller-token.outputs.token }}
         run: |

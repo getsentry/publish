@@ -3,6 +3,7 @@ name: CI Status Poller
 on:
   schedule:
     - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,29 +12,16 @@ permissions:
 jobs:
   check-ci:
     runs-on: ubuntu-latest
+    environment: production
+    # Skip entirely (no runner provisioned) when there's nothing to check.
+    # Set to "true" by ci-pending.yml, reset to "false" here when done.
+    # Always allow workflow_dispatch for manual recovery.
+    if: vars.CI_POLLER_HAS_PENDING == 'true' || github.event_name == 'workflow_dispatch'
     concurrency:
       group: ci-status-poller
       cancel-in-progress: false
     steps:
-      # Cheap first check with GITHUB_TOKEN — if no ci-pending issues exist,
-      # exit immediately without generating an app token (~5s idle cost).
-      - name: Check for pending issues
-        id: pending
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          count=$(gh issue list -R "$GITHUB_REPOSITORY" \
-            --state open \
-            --label ci-pending \
-            --limit 1 \
-            --json number -q 'length')
-          echo "count=${count}" >> "$GITHUB_OUTPUT"
-          if [[ "$count" == "0" ]]; then
-            echo "No ci-pending issues. Nothing to do."
-          fi
-
       - name: Get auth token
-        if: steps.pending.outputs.count != '0'
         id: token
         uses: actions/create-github-app-token@v3
         with:
@@ -41,7 +29,6 @@ jobs:
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
       - name: Check CI status for ci-pending issues
-        if: steps.pending.outputs.count != '0'
         env:
           # Use the app token so label changes trigger publish.yml
           # (GITHUB_TOKEN events are suppressed by GitHub).
@@ -55,6 +42,10 @@ jobs:
             --json number,title,labels,body)
 
           count=$(echo "$issues" | jq length)
+          if [[ "$count" == "0" ]]; then
+            echo "No ci-pending issues found."
+            exit 0
+          fi
           echo "Found ${count} ci-pending issue(s)."
 
           # Check each issue's CI status
@@ -182,3 +173,45 @@ jobs:
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment"
             fi
           done
+
+      # Cleanup: check if we should disable the poller. Runs even if the
+      # CI check step above failed, so CI_POLLER_HAS_PENDING doesn't get
+      # stuck on "true" permanently.
+      - name: Check for remaining pending issues
+        if: always()
+        id: remaining
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh issue list -R "$GITHUB_REPOSITORY" \
+            --state open \
+            --label ci-pending \
+            --limit 1 \
+            --json number -q 'length')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+
+      # Update the poller variable to match reality:
+      # - Remaining issues → ensure variable is "true" (important when
+      #   workflow_dispatch bypassed the gate while variable was "false")
+      # - No remaining issues → set to "false" to stop the cron
+      # Placed after CI check so a token failure can't block CI checking.
+      - name: Get poller app token
+        if: always()
+        id: poller-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
+
+      - name: Sync poller variable with pending issue state
+        if: always() && steps.poller-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.poller-token.outputs.token }}
+        run: |
+          if [[ "${{ steps.remaining.outputs.count }}" == "0" ]]; then
+            echo "All ci-pending issues resolved. Disabling poller."
+            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"
+          else
+            echo "Still pending issues. Ensuring poller stays enabled."
+            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"
+          fi

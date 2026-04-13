@@ -205,7 +205,7 @@ jobs:
       # our check and our set-to-false. Worst case: the new issue waits one
       # cron tick (5 min). ci-pending.yml will re-enable on the next opened event.
       - name: Disable poller if no pending issues remain
-        if: always() && steps.remaining.outputs.count == '0'
+        if: always() && steps.remaining.outputs.count == '0' && steps.poller-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.poller-token.outputs.token }}
         run: |

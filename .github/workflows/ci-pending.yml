@@ -34,14 +34,19 @@ jobs:
             -R "$GITHUB_REPOSITORY" \
             --add-label "ci-pending"
 
+      # Best-effort: enable the cron poller variable. If this fails, the
+      # poller's cron will still pick up the issue (it just won't skip the
+      # runner provisioning on idle ticks until the variable is set).
       - name: Get poller app token
         id: poller-token
+        continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
           private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
 
       - name: Enable cron poller
+        if: steps.poller-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.poller-token.outputs.token }}
         run: |

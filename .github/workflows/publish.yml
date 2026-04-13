@@ -98,7 +98,7 @@ jobs:
         id: token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
           owner: getsentry # create token that have access to all repos
 

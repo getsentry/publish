@@ -37,7 +37,7 @@ jobs:
         id: token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
       - name: Check CI status for ci-pending issues
@@ -64,8 +64,11 @@ jobs:
             body=$(echo "$issue" | jq -r '.body')
             has_accepted=$(echo "$issue" | jq '[.labels[].name] | any(. == "accepted")')
 
-            # Parse repo and version from title: "publish: owner/repo@version"
-            repo=$(echo "$title" | sed -n 's/^publish: \(.*\)@.*/\1/p')
+            # Parse repo and version from title: "publish: owner/repo[/path]@version"
+            # Only take owner/repo (first two segments) — monorepos like
+            # "getsentry/relay/py@0.9.26" have a path suffix that isn't part
+            # of the GitHub repo name.
+            repo=$(echo "$title" | sed -n 's|^publish: \([^/]*/[^/@]*\).*@.*|\1|p')
             version=$(echo "$title" | sed -n 's/^publish: .*@\(.*\)/\1/p')
 
             if [[ -z "$repo" || -z "$version" ]]; then

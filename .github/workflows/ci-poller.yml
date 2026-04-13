@@ -15,7 +15,8 @@ jobs:
     environment: production
     # Skip entirely (no runner provisioned) when there's nothing to check.
     # Set to "true" by ci-pending.yml, reset to "false" here when done.
-    if: vars.CI_POLLER_HAS_PENDING == 'true'
+    # Always allow workflow_dispatch for manual recovery.
+    if: vars.CI_POLLER_HAS_PENDING == 'true' || github.event_name == 'workflow_dispatch'
     concurrency:
       group: ci-status-poller
       cancel-in-progress: false
@@ -197,6 +198,9 @@ jobs:
           echo "count=${count}" >> "$GITHUB_OUTPUT"
 
       # Disable the poller if no ci-pending issues remain.
+      # Race window: ci-pending.yml could set the variable to "true" between
+      # our check and our set-to-false. Worst case: the new issue waits one
+      # cron tick (5 min). ci-pending.yml will re-enable on the next opened event.
       - name: Disable poller if no pending issues remain
         if: steps.remaining.outputs.count == '0'
         env:

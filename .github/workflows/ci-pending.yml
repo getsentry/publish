@@ -11,6 +11,7 @@ permissions:
 jobs:
   mark-pending:
     runs-on: ubuntu-latest
+    environment: production
     if: "startsWith(github.event.issue.title, 'publish: ')"
     steps:
       - name: Get auth token
@@ -19,6 +20,13 @@ jobs:
         with:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+
+      - name: Get poller app token
+        id: poller-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
 
       - name: Add ci-pending label
         env:
@@ -29,3 +37,9 @@ jobs:
           gh issue edit "${{ github.event.issue.number }}" \
             -R "$GITHUB_REPOSITORY" \
             --add-label "ci-pending"
+
+      - name: Enable cron poller
+        env:
+          GH_TOKEN: ${{ steps.poller-token.outputs.token }}
+        run: |
+          gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"

@@ -21,13 +21,9 @@ jobs:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      - name: Get poller app token
-        id: poller-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
-          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
-
+      # Add the label first — this is the critical step. The poller
+      # token and variable set below are best-effort optimizations
+      # that must not block label addition.
       - name: Add ci-pending label
         env:
           # Use the app token so the label event triggers publish.yml
@@ -37,6 +33,13 @@ jobs:
           gh issue edit "${{ github.event.issue.number }}" \
             -R "$GITHUB_REPOSITORY" \
             --add-label "ci-pending"
+
+      - name: Get poller app token
+        id: poller-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
 
       - name: Enable cron poller
         env:

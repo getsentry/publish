@@ -182,17 +182,25 @@ jobs:
             fi
           done
 
-      # Disable the poller if no ci-pending issues remain.
-      - name: Disable poller if no pending issues remain
+      # Check if any ci-pending issues remain (using GITHUB_TOKEN for
+      # read access — the poller app may only have actions_variables).
+      - name: Check for remaining pending issues
+        id: remaining
         env:
-          GH_TOKEN: ${{ steps.poller-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          remaining=$(gh issue list -R "$GITHUB_REPOSITORY" \
+          count=$(gh issue list -R "$GITHUB_REPOSITORY" \
             --state open \
             --label ci-pending \
             --limit 1 \
             --json number -q 'length')
-          if [[ "$remaining" == "0" ]]; then
-            echo "All ci-pending issues resolved. Disabling poller."
-            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"
-          fi
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+
+      # Disable the poller if no ci-pending issues remain.
+      - name: Disable poller if no pending issues remain
+        if: steps.remaining.outputs.count == '0'
+        env:
+          GH_TOKEN: ${{ steps.poller-token.outputs.token }}
+        run: |
+          echo "All ci-pending issues resolved. Disabling poller."
+          gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"

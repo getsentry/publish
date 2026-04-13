@@ -171,6 +171,22 @@ jobs:
                 comment="CI checks passed for ${repo}@${version}. Publishing will start once the **accepted** label is also present."
               fi
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment"
+
+            elif [[ "$pending_checks" == "0" && "$unsuccessful_checks" != "0" ]]; then
+              # All checks completed but some failed — notify the author.
+              # Only comment once per SHA to avoid spam on every poller tick.
+              marker="<!-- ci-failure-${sha} -->"
+              existing=$(gh issue view "$number" -R "$GITHUB_REPOSITORY" \
+                --json comments -q "[.comments[].body | select(contains(\"${marker}\"))] | length" 2>/dev/null || echo "0")
+
+              if [[ "$existing" == "0" ]]; then
+                echo "  CI failed. Commenting on issue."
+                failed_names=$(echo "$all_checks" | jq -rs '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | .name] | join(", ")')
+                body="${marker}"$'\n'"CI checks **failed** for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked until CI passes."$'\n\n'"Failed checks: ${failed_names}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"
+                gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$body"
+              else
+                echo "  CI failed (already commented for this SHA)."
+              fi
             fi
           done
 

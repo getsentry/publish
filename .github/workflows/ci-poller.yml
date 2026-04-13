@@ -190,24 +190,28 @@ jobs:
             --json number -q 'length')
           echo "count=${count}" >> "$GITHUB_OUTPUT"
 
-      # Get the poller app token only when we need to disable the variable.
-      # Placed here (after CI check) so a token failure can't block CI checking.
+      # Update the poller variable to match reality:
+      # - Remaining issues → ensure variable is "true" (important when
+      #   workflow_dispatch bypassed the gate while variable was "false")
+      # - No remaining issues → set to "false" to stop the cron
+      # Placed after CI check so a token failure can't block CI checking.
       - name: Get poller app token
-        if: always() && steps.remaining.outputs.count == '0'
+        if: always()
         id: poller-token
         uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
           private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
 
-      # Disable the poller if no ci-pending issues remain.
-      # Race window: ci-pending.yml could set the variable to "true" between
-      # our check and our set-to-false. Worst case: the new issue waits one
-      # cron tick (5 min). ci-pending.yml will re-enable on the next opened event.
-      - name: Disable poller if no pending issues remain
-        if: always() && steps.remaining.outputs.count == '0' && steps.poller-token.outcome == 'success'
+      - name: Sync poller variable with pending issue state
+        if: always() && steps.poller-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.poller-token.outputs.token }}
         run: |
-          echo "All ci-pending issues resolved. Disabling poller."
-          gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"
+          if [[ "${{ steps.remaining.outputs.count }}" == "0" ]]; then
+            echo "All ci-pending issues resolved. Disabling poller."
+            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"
+          else
+            echo "Still pending issues. Ensuring poller stays enabled."
+            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"
+          fi

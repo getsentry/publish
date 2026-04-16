@@ -188,8 +188,10 @@ jobs:
                 echo "  CI failed (already commented for this SHA)."
               fi
 
-            elif [[ "$status_ok" == "false" && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
-              # All check runs passed but commit statuses reported a failure
+            elif [[ "$commit_status" == "failure" && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
+              # All check runs passed but commit statuses reported a failure.
+              # Note: we check for "failure" explicitly, not just !status_ok,
+              # because "pending" statuses should fall through to retry next tick.
               marker="<!-- ci-failure-${sha} -->"
               existing=$(gh issue view "$number" -R "$GITHUB_REPOSITORY" \
                 --json comments -q "[.comments[].body | select(contains(\"${marker}\"))] | length" 2>/dev/null || echo "0")

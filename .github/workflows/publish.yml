@@ -15,35 +15,69 @@ permissions:
   packages: write
 
 jobs:
-  # Lightweight job: comment when approved but CI hasn't finished yet
+  # When accepted is added but CI isn't ready yet, comment and trigger the poller.
+  # Also handles the ci-failed → ci-pending retry flow.
   waiting-for-ci:
     runs-on: ubuntu-latest
     name: Waiting for CI
     if: >-
       github.event.label.name == 'accepted'
       && github.event.issue.state == 'open'
-      && contains(github.event.issue.labels.*.name, 'ci-pending')
+      && (contains(github.event.issue.labels.*.name, 'ci-pending')
+          || contains(github.event.issue.labels.*.name, 'ci-failed'))
     steps:
+      - name: Get auth token
+        id: token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+
+      # If the issue has ci-failed (retry after fix), swap back to ci-pending.
+      - name: Reset ci-failed to ci-pending
+        if: contains(github.event.issue.labels.*.name, 'ci-failed')
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label "ci-failed" \
+            --add-label "ci-pending"
+
       - name: Comment on issue
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [[ "${{ contains(github.event.issue.labels.*.name, 'ci-failed') }}" == "true" ]]; then
+            body="Retrying — CI was previously failed. Checking CI status now."
+          else
+            body="Approved, but CI is still running on the release branch. Publishing will start automatically when CI passes."
+          fi
           gh issue comment "${{ github.event.issue.number }}" \
             -R "$GITHUB_REPOSITORY" \
-            --body "Approved, but CI is still running on the release branch. Publishing will start automatically when CI passes."
+            --body "$body"
+
+      # Trigger the CI poller immediately instead of waiting for the next cron tick.
+      # Uses the app token — GITHUB_TOKEN workflow_dispatch events are suppressed.
+      - name: Trigger CI poller
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh workflow run ci-poller.yml -R "$GITHUB_REPOSITORY"
 
   publish:
     runs-on: ubuntu-latest
     environment: production
     name: Publish a new version
     # Run when:
-    #   - accepted (with no ci-pending blocking), OR
+    #   - accepted (with no ci-pending/ci-failed blocking), OR
     #   - ci-ready added (and accepted is already present)
-    # In all cases accepted must be present and ci-pending must not be.
+    # In all cases accepted must be present and ci-pending/ci-failed must not be.
     if: >-
       github.event.issue.state == 'open'
       && contains(github.event.issue.labels.*.name, 'accepted')
       && !contains(github.event.issue.labels.*.name, 'ci-pending')
+      && !contains(github.event.issue.labels.*.name, 'ci-failed')
       && (github.event.label.name == 'accepted' || github.event.label.name == 'ci-ready')
     timeout-minutes: 90
     env:

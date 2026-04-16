@@ -187,6 +187,24 @@ jobs:
               else
                 echo "  CI failed (already commented for this SHA)."
               fi
+
+            elif [[ "$commit_status" == "failure" && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
+              # All check runs passed but commit statuses reported a failure.
+              # Note: we check for "failure" explicitly, not just !status_ok,
+              # because "pending" statuses should fall through to retry next tick.
+              marker="<!-- ci-status-failure-${sha} -->"
+              existing=$(gh issue view "$number" -R "$GITHUB_REPOSITORY" \
+                --json comments -q "[.comments[].body | select(contains(\"${marker}\"))] | length" 2>/dev/null || echo "0")
+
+              if [[ "$existing" == "0" ]]; then
+                echo "  CI failed (commit status). Commenting on issue."
+                failed_contexts=$(gh api "repos/${repo}/commits/${sha}/status" \
+                  --jq '[.statuses[] | select(.state == "failure" or .state == "error")] | map(.context + " (" + .state + ")") | join(", ")')
+                body="${marker}"$'\n'"CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked until CI passes."$'\n\n'"Failed status checks: ${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"
+                gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$body"
+              else
+                echo "  CI failed via commit status (already commented for this SHA)."
+              fi
             fi
           done
 

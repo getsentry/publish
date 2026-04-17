@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      attempt:
+        description: Self-dispatch attempt counter (internal use)
+        required: false
+        default: "0"
 
 permissions:
   contents: read
@@ -242,3 +247,24 @@ jobs:
             echo "Still pending issues. Ensuring poller stays enabled."
             gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"
           fi
+
+      # Self-dispatch for fast re-checking when issues are still pending.
+      # GitHub's cron is unreliable (*/5 can drift to 30-40 min under load).
+      # Self-dispatch gives ~30-60s between checks via GHA startup latency.
+      # The concurrency group prevents accumulation (1 running + 1 queued).
+      # Cap at 60 attempts (~30 min). If CI hasn't passed by then, the cron
+      # fallback continues checking and the chain restarts on the next
+      # manual trigger (accepted label re-added or workflow_dispatch).
+      - name: Self-dispatch if issues remain pending
+        if: always() && steps.remaining.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          ATTEMPT: ${{ github.event.inputs.attempt || '0' }}
+        run: |
+          attempt=$((ATTEMPT + 1))
+          if [[ "$attempt" -ge 60 ]]; then
+            echo "::warning::Max self-dispatch attempts (60) reached. Relying on cron fallback."
+            exit 0
+          fi
+          echo "Re-dispatching (attempt ${attempt}/360)..."
+          gh workflow run ci-poller.yml -R "$GITHUB_REPOSITORY" -f attempt="${attempt}"

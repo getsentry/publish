@@ -34,26 +34,27 @@ jobs:
           # (GITHUB_TOKEN events are suppressed by GitHub).
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
-          # Find all open issues with ci-pending label (include body to extract commit SHA)
+          # Only check issues that have BOTH ci-pending AND accepted labels.
+          # This avoids polling for abandoned releases that nobody approved.
           issues=$(gh issue list -R "$GITHUB_REPOSITORY" \
             --state open \
             --label ci-pending \
+            --label accepted \
             --limit 200 \
             --json number,title,labels,body)
 
           count=$(echo "$issues" | jq length)
           if [[ "$count" == "0" ]]; then
-            echo "No ci-pending issues found."
+            echo "No ci-pending + accepted issues found."
             exit 0
           fi
-          echo "Found ${count} ci-pending issue(s)."
+          echo "Found ${count} ci-pending + accepted issue(s)."
 
           # Check each issue's CI status
           echo "$issues" | jq -c '.[]' | while read -r issue; do
             number=$(echo "$issue" | jq -r '.number')
             title=$(echo "$issue" | jq -r '.title')
             body=$(echo "$issue" | jq -r '.body')
-            has_accepted=$(echo "$issue" | jq '[.labels[].name] | any(. == "accepted")')
 
             # Parse repo and version from title: "publish: owner/repo[/path]@version"
             # Only take owner/repo (first two segments) — monorepos like
@@ -165,46 +166,37 @@ jobs:
                 --remove-label "ci-pending" \
                 --add-label "ci-ready"
 
-              if [[ "$has_accepted" == "true" ]]; then
-                comment="CI checks passed for ${repo}@${version}. Publishing is starting now."
-              else
-                comment="CI checks passed for ${repo}@${version}. Publishing will start once the **accepted** label is also present."
-              fi
-              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment"
+              # We only poll issues that have both ci-pending and accepted,
+              # so publishing will start as soon as ci-ready is added.
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                --body "CI checks passed for ${repo}@${version}. Publishing is starting now."
 
             elif [[ "$pending_checks" == "0" && "$unsuccessful_checks" != "0" ]]; then
-              # All checks completed but some failed — notify the author.
-              # Only comment once per SHA to avoid spam on every poller tick.
-              marker="<!-- ci-failure-${sha} -->"
-              existing=$(gh issue view "$number" -R "$GITHUB_REPOSITORY" \
-                --json comments -q "[.comments[].body | select(contains(\"${marker}\"))] | length" 2>/dev/null || echo "0")
+              # All checks completed but some failed.
+              # Swap ci-pending → ci-failed, remove accepted to stop polling.
+              # The author must fix CI and re-add accepted to retry.
+              echo "  CI failed! Swapping ci-pending → ci-failed and removing accepted."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --remove-label "accepted" \
+                --add-label "ci-failed"
 
-              if [[ "$existing" == "0" ]]; then
-                echo "  CI failed. Commenting on issue."
-                failed_names=$(echo "$all_checks" | jq -rs '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | .name] | join(", ")')
-                body="${marker}"$'\n'"CI checks **failed** for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked until CI passes."$'\n\n'"Failed checks: ${failed_names}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"
-                gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$body"
-              else
-                echo "  CI failed (already commented for this SHA)."
-              fi
+              failed_names=$(echo "$all_checks" | jq -rs '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | .name] | join(", ")')
+              comment_body="CI checks **failed** for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed checks: ${failed_names}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
 
             elif [[ "$commit_status" == "failure" && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
               # All check runs passed but commit statuses reported a failure.
-              # Note: we check for "failure" explicitly, not just !status_ok,
-              # because "pending" statuses should fall through to retry next tick.
-              marker="<!-- ci-status-failure-${sha} -->"
-              existing=$(gh issue view "$number" -R "$GITHUB_REPOSITORY" \
-                --json comments -q "[.comments[].body | select(contains(\"${marker}\"))] | length" 2>/dev/null || echo "0")
+              echo "  CI failed (commit status)! Swapping ci-pending → ci-failed and removing accepted."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --remove-label "accepted" \
+                --add-label "ci-failed"
 
-              if [[ "$existing" == "0" ]]; then
-                echo "  CI failed (commit status). Commenting on issue."
-                failed_contexts=$(gh api "repos/${repo}/commits/${sha}/status" \
-                  --jq '[.statuses[] | select(.state == "failure" or .state == "error")] | map(.context + " (" + .state + ")") | join(", ")')
-                body="${marker}"$'\n'"CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked until CI passes."$'\n\n'"Failed status checks: ${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"
-                gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$body"
-              else
-                echo "  CI failed via commit status (already commented for this SHA)."
-              fi
+              failed_contexts=$(gh api "repos/${repo}/commits/${sha}/status" \
+                --jq '[.statuses[] | select(.state == "failure" or .state == "error")] | map(.context + " (" + .state + ")") | join(", ")')
+              comment_body="CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed status checks: ${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
             fi
           done
 
@@ -220,6 +212,7 @@ jobs:
           count=$(gh issue list -R "$GITHUB_REPOSITORY" \
             --state open \
             --label ci-pending \
+            --label accepted \
             --limit 1 \
             --json number -q 'length')
           echo "count=${count}" >> "$GITHUB_OUTPUT"

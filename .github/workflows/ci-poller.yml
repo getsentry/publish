@@ -26,6 +26,9 @@ jobs:
       group: ci-status-poller
       cancel-in-progress: false
     steps:
+      # sentry-internal-app token for label changes on this repo.
+      # This token is what triggers publish.yml downstream — see
+      # https://github.com/getsentry/publish for why GITHUB_TOKEN can't.
       - name: Get auth token
         id: token
         uses: actions/create-github-app-token@v3
@@ -33,12 +36,40 @@ jobs:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
+      # sentry-release-bot token for cross-repo API access (check-suites,
+      # status, check-runs). The sentry-internal-app is only installed on
+      # some repos, so it 404s on private repos like sentry-xbox,
+      # sentry-playstation, sentry-switch, service-registry, etc.
+      - name: Get release bot auth token
+        id: release-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          owner: getsentry # create token with access to all getsentry repos
+
       - name: Check CI status for ci-pending issues
         env:
-          # Use the app token so label changes trigger publish.yml
-          # (GITHUB_TOKEN events are suppressed by GitHub).
+          # Use the sentry-internal-app token for label changes on this
+          # repo (so events trigger publish.yml), and the release bot
+          # token for cross-repo API calls (installed on all getsentry repos).
           GH_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_TOKEN: ${{ steps.release-token.outputs.token }}
         run: |
+          # Helper: gh api using release-bot token (for cross-repo calls).
+          # Uses a subshell so GH_TOKEN override doesn't leak to other calls.
+          # Captures stdout and exits non-zero on API failure (including 404s)
+          # so callers can reliably detect errors.
+          gh_api_release() {
+            local output
+            output=$(GH_TOKEN="$RELEASE_TOKEN" gh api "$@" 2>&1)
+            local exit_code=$?
+            if [[ $exit_code -ne 0 ]]; then
+              echo "::warning::gh api failed: $output" >&2
+              return $exit_code
+            fi
+            printf '%s' "$output"
+          }
           # Only check issues that have BOTH ci-pending AND accepted labels.
           # This avoids polling for abandoned releases that nobody approved.
           issues=$(gh issue list -R "$GITHUB_REPOSITORY" \
@@ -85,14 +116,22 @@ jobs:
             # Resolve the release branch name from the original commit's check
             # suites (avoids hard-coding "release/{version}" since repos can
             # customize branch names in their craft config).
-            branch=$(gh api "repos/${repo}/commits/${issue_sha}/check-suites" \
-              --jq '.check_suites[0].head_branch // empty' 2>/dev/null || true)
+            # Failures are non-fatal — we fall back to the issue SHA below.
+            branch=""
+            if branch_result=$(gh_api_release "repos/${repo}/commits/${issue_sha}/check-suites" \
+              --jq '.check_suites[0].head_branch // empty'); then
+              branch="$branch_result"
+            fi
 
             if [[ -n "$branch" ]]; then
               # Resolve the branch HEAD — may differ from issue_sha if a bot
               # (e.g., auto-fix, skill regeneration) pushed a new commit.
-              head_sha=$(gh api "repos/${repo}/git/ref/heads/${branch}" \
-                --jq '.object.sha' 2>/dev/null || true)
+              # Also non-fatal — falls back to issue SHA.
+              head_sha=""
+              if head_result=$(gh_api_release "repos/${repo}/git/ref/heads/${branch}" \
+                --jq '.object.sha'); then
+                head_sha="$head_result"
+              fi
 
               if [[ -n "$head_sha" ]]; then
                 sha="$head_sha"
@@ -117,22 +156,23 @@ jobs:
             echo "Checking CI for ${repo}@${version} commit ${sha:0:8} (issue #${number})..."
 
             # Check combined commit status ("pending" means statuses exist but
-            # some haven't resolved yet; it does NOT mean "no statuses reported")
-            commit_status=$(gh api "repos/${repo}/commits/${sha}/status" \
-              --jq '.state' 2>/dev/null || echo "error")
-            total_statuses=$(gh api "repos/${repo}/commits/${sha}/status" \
-              --jq '.total_count' 2>/dev/null || echo "0")
-
-            if [[ "$commit_status" == "error" ]]; then
+            # some haven't resolved yet; it does NOT mean "no statuses reported").
+            # Skip the issue entirely if the status API fails (e.g., app isn't
+            # installed on this repo) — don't try to derive state from partial data.
+            if ! status_json=$(gh_api_release "repos/${repo}/commits/${sha}/status"); then
               echo "  Could not fetch commit status for ${repo}@${sha:0:8}, skipping."
               continue
             fi
+            commit_status=$(echo "$status_json" | jq -r '.state')
+            total_statuses=$(echo "$status_json" | jq -r '.total_count')
 
             # Fetch all check runs (paginate to handle repos with >30 checks).
             # --paginate --jq applies the filter per-page, so we flatten with
             # '.check_runs[]' and count with a second jq pass.
-            all_checks=$(gh api --paginate "repos/${repo}/commits/${sha}/check-runs" \
-              --jq '.check_runs[]' 2>/dev/null || true)
+            if ! all_checks=$(gh_api_release --paginate "repos/${repo}/commits/${sha}/check-runs" --jq '.check_runs[]'); then
+              echo "  Could not fetch check runs for ${repo}@${sha:0:8}, skipping."
+              continue
+            fi
 
             total_checks=$(echo "$all_checks" | jq -s 'length')
             pending_checks=$(echo "$all_checks" | jq -s '[.[] | select(.status != "completed")] | length')
@@ -198,8 +238,8 @@ jobs:
                 --remove-label "accepted" \
                 --add-label "ci-failed"
 
-              failed_contexts=$(gh api "repos/${repo}/commits/${sha}/status" \
-                --jq '[.statuses[] | select(.state == "failure" or .state == "error")] | map(.context + " (" + .state + ")") | join(", ")')
+              failed_contexts=$(echo "$status_json" \
+                | jq -r '[.statuses[] | select(.state == "failure" or .state == "error")] | map(.context + " (" + .state + ")") | join(", ")')
               comment_body="CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed status checks: ${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
             fi

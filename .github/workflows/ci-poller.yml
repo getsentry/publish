@@ -116,14 +116,22 @@ jobs:
             # Resolve the release branch name from the original commit's check
             # suites (avoids hard-coding "release/{version}" since repos can
             # customize branch names in their craft config).
-            branch=$(gh_api_release "repos/${repo}/commits/${issue_sha}/check-suites" \
-              --jq '.check_suites[0].head_branch // empty' 2>/dev/null || true)
+            # Failures are non-fatal — we fall back to the issue SHA below.
+            branch=""
+            if branch_result=$(gh_api_release "repos/${repo}/commits/${issue_sha}/check-suites" \
+              --jq '.check_suites[0].head_branch // empty'); then
+              branch="$branch_result"
+            fi
 
             if [[ -n "$branch" ]]; then
               # Resolve the branch HEAD — may differ from issue_sha if a bot
               # (e.g., auto-fix, skill regeneration) pushed a new commit.
-              head_sha=$(gh_api_release "repos/${repo}/git/ref/heads/${branch}" \
-                --jq '.object.sha' 2>/dev/null || true)
+              # Also non-fatal — falls back to issue SHA.
+              head_sha=""
+              if head_result=$(gh_api_release "repos/${repo}/git/ref/heads/${branch}" \
+                --jq '.object.sha'); then
+                head_sha="$head_result"
+              fi
 
               if [[ -n "$head_sha" ]]; then
                 sha="$head_sha"

@@ -258,6 +258,7 @@ jobs:
       - name: Self-dispatch if issues remain pending
         if: >-
           always()
+          && steps.token.outcome == 'success'
           && steps.remaining.outcome == 'success'
           && steps.remaining.outputs.count != '0'
         env:

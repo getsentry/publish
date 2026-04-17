@@ -256,7 +256,10 @@ jobs:
       # fallback continues checking and the chain restarts on the next
       # manual trigger (accepted label re-added or workflow_dispatch).
       - name: Self-dispatch if issues remain pending
-        if: always() && steps.remaining.outputs.count != '0'
+        if: >-
+          always()
+          && steps.remaining.outcome == 'success'
+          && steps.remaining.outputs.count != '0'
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           ATTEMPT: ${{ github.event.inputs.attempt || '0' }}
@@ -266,5 +269,5 @@ jobs:
             echo "::warning::Max self-dispatch attempts (60) reached. Relying on cron fallback."
             exit 0
           fi
-          echo "Re-dispatching (attempt ${attempt}/360)..."
+          echo "Re-dispatching (attempt ${attempt}/60)..."
           gh workflow run ci-poller.yml -R "$GITHUB_REPOSITORY" -f attempt="${attempt}"

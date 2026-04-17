@@ -166,12 +166,10 @@ jobs:
                 --remove-label "ci-pending" \
                 --add-label "ci-ready"
 
-              if [[ "$has_accepted" == "true" ]]; then
-                comment="CI checks passed for ${repo}@${version}. Publishing is starting now."
-              else
-                comment="CI checks passed for ${repo}@${version}. Publishing will start once the **accepted** label is also present."
-              fi
-              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment"
+              # We only poll issues that have both ci-pending and accepted,
+              # so publishing will start as soon as ci-ready is added.
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                --body "CI checks passed for ${repo}@${version}. Publishing is starting now."
 
             elif [[ "$pending_checks" == "0" && "$unsuccessful_checks" != "0" ]]; then
               # All checks completed but some failed.

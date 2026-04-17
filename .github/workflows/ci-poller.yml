@@ -169,7 +169,7 @@ jobs:
             # Fetch all check runs (paginate to handle repos with >30 checks).
             # --paginate --jq applies the filter per-page, so we flatten with
             # '.check_runs[]' and count with a second jq pass.
-            if ! all_checks=$(GH_TOKEN="$RELEASE_TOKEN" gh api --paginate "repos/${repo}/commits/${sha}/check-runs" --jq '.check_runs[]'); then
+            if ! all_checks=$(gh_api_release --paginate "repos/${repo}/commits/${sha}/check-runs" --jq '.check_runs[]'); then
               echo "  Could not fetch check runs for ${repo}@${sha:0:8}, skipping."
               continue
             fi

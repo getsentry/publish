@@ -15,16 +15,22 @@ permissions:
   packages: write
 
 jobs:
-  # When accepted is added but CI isn't ready yet, comment and trigger the poller.
-  # Also handles the ci-failed → ci-pending retry flow.
+  # When accepted is added to a publish issue:
+  #   - Add ci-pending (and remove ci-failed if retrying)
+  #   - Enable the poller via CI_POLLER_HAS_PENDING=true
+  #   - Comment on the issue
+  #   - Trigger the poller immediately so we don't wait for the next cron tick
+  # The publish job below requires ci-ready, so it will not fire until the
+  # poller flips ci-pending → ci-ready (which also prevents publishing without
+  # CI verification in the auto-approve race).
   waiting-for-ci:
     runs-on: ubuntu-latest
     name: Waiting for CI
+    environment: production
     if: >-
       github.event.label.name == 'accepted'
       && github.event.issue.state == 'open'
-      && (contains(github.event.issue.labels.*.name, 'ci-pending')
-          || contains(github.event.issue.labels.*.name, 'ci-failed'))
+      && startsWith(github.event.issue.title, 'publish: ')
     steps:
       - name: Get auth token
         id: token
@@ -33,9 +39,9 @@ jobs:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      # If the issue has ci-failed (retry after fix), swap back to ci-pending.
-      - name: Reset ci-failed to ci-pending
-        if: contains(github.event.issue.labels.*.name, 'ci-failed')
+      # Add ci-pending (removing ci-failed if present for retries).
+      # Label idempotent: --add/--remove don't fail if already added/removed.
+      - name: Mark ci-pending
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
@@ -51,11 +57,28 @@ jobs:
           if [[ "${{ contains(github.event.issue.labels.*.name, 'ci-failed') }}" == "true" ]]; then
             body="Retrying — CI was previously failed. Checking CI status now."
           else
-            body="Approved, but CI is still running on the release branch. Publishing will start automatically when CI passes."
+            body="Approved. Checking CI status on the release branch. Publishing will start automatically when CI passes."
           fi
           gh issue comment "${{ github.event.issue.number }}" \
             -R "$GITHUB_REPOSITORY" \
             --body "$body"
+
+      # Best-effort: enable the cron poller. Uses a dedicated app since
+      # sentry-internal-app lacks actions_variables:write.
+      - name: Get poller app token
+        id: poller-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
+
+      - name: Enable cron poller
+        if: steps.poller-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.poller-token.outputs.token }}
+        run: |
+          gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"
 
       # Trigger the CI poller immediately instead of waiting for the next cron tick.
       # Uses the app token — GITHUB_TOKEN workflow_dispatch events are suppressed.
@@ -69,13 +92,15 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     name: Publish a new version
-    # Run when:
-    #   - accepted (with no ci-pending/ci-failed blocking), OR
-    #   - ci-ready added (and accepted is already present)
-    # In all cases accepted must be present and ci-pending/ci-failed must not be.
+    # Publish when ci-ready is present (added by the poller after CI passes).
+    # Requiring ci-ready (instead of just !ci-pending) prevents publishing when
+    # auto-approve adds "accepted" before any of our workflows have added a
+    # CI label — without this check, the publish job would race and run
+    # before CI is verified.
     if: >-
       github.event.issue.state == 'open'
       && contains(github.event.issue.labels.*.name, 'accepted')
+      && contains(github.event.issue.labels.*.name, 'ci-ready')
       && !contains(github.event.issue.labels.*.name, 'ci-pending')
       && !contains(github.event.issue.labels.*.name, 'ci-failed')
       && (github.event.label.name == 'accepted' || github.event.label.name == 'ci-ready')

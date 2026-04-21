@@ -100,17 +100,18 @@ jobs:
     environment: production
     name: Publish a new version
     # Publish when ci-ready is present (added by the poller after CI passes).
-    # Requiring ci-ready (instead of just !ci-pending) prevents publishing when
-    # auto-approve adds "accepted" before any of our workflows have added a
-    # CI label — without this check, the publish job would race and run
-    # before CI is verified.
+    # Fires ONLY on ci-ready label events — not accepted — to avoid racing
+    # with waiting-for-ci on the same event. The poller always adds ci-ready
+    # after checking CI (even if ci-ready was already present, waiting-for-ci
+    # removes it first so a fresh labeled event fires), so this gate is
+    # guaranteed to trigger on the happy path.
     if: >-
       github.event.issue.state == 'open'
+      && github.event.label.name == 'ci-ready'
       && contains(github.event.issue.labels.*.name, 'accepted')
       && contains(github.event.issue.labels.*.name, 'ci-ready')
       && !contains(github.event.issue.labels.*.name, 'ci-pending')
       && !contains(github.event.issue.labels.*.name, 'ci-failed')
-      && (github.event.label.name == 'accepted' || github.event.label.name == 'ci-ready')
     timeout-minutes: 90
     env:
       SENTRY_DSN: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838"

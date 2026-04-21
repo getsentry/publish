@@ -39,8 +39,14 @@ jobs:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
-      # Add ci-pending (removing ci-failed if present for retries).
-      # Label idempotent: --add/--remove don't fail if already added/removed.
+      # Reset to a clean ci-pending state:
+      # - Remove ci-failed (retries after CI was fixed)
+      # - Remove ci-ready (retries after a publish failure — if we leave
+      #   ci-ready, the poller's later --add-label won't generate a
+      #   labeled event and publish.yml would never fire)
+      # - Add ci-pending
+      # Label ops are idempotent: --add/--remove don't fail if already
+      # added/removed.
       - name: Mark ci-pending
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
@@ -48,6 +54,7 @@ jobs:
           gh issue edit "${{ github.event.issue.number }}" \
             -R "$GITHUB_REPOSITORY" \
             --remove-label "ci-failed" \
+            --remove-label "ci-ready" \
             --add-label "ci-pending"
 
       - name: Comment on issue

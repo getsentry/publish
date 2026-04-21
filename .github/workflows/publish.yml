@@ -84,11 +84,55 @@ jobs:
       - name: Set targets
         shell: bash
         if: fromJSON(steps.inputs.outputs.result).targets
-        run: >
-          jq -n --argjson
-          source '${{ toJSON(fromJSON(steps.inputs.outputs.result).targets) }}'
-          '[{($source[]): true }] | add | {"published": (. // {}) }'
-          > __repo__/${{ fromJSON(steps.inputs.outputs.result).path }}/.craft-publish-${{ fromJSON(steps.inputs.outputs.result).version }}.json
+        env:
+          CRAFT_PUBLISH_REPO: ${{ fromJSON(steps.inputs.outputs.result).repo }}
+          CRAFT_PUBLISH_PATH: ${{ fromJSON(steps.inputs.outputs.result).path }}
+          CRAFT_PUBLISH_VERSION: ${{ fromJSON(steps.inputs.outputs.result).version }}
+          CRAFT_PUBLISH_TARGETS_JSON: ${{ toJSON(fromJSON(steps.inputs.outputs.result).targets) }}
+        run: |
+          # Render the "already published" JSON once, reuse twice.
+          payload="$(jq -n --argjson source "$CRAFT_PUBLISH_TARGETS_JSON" '[{($source[]): true }] | add | {"published": (. // {}) }')"
+
+          # Write the NEW location Craft reads from (post
+          # getsentry/craft#795). Craft sees cwd
+          # `/github/workspace/__repo__/<path>` inside the container;
+          # the state dir is pinned to `$GITHUB_WORKSPACE/.craft-state`
+          # (mapped to `/github/workspace/.craft-state` in the
+          # container) via XDG_STATE_HOME. That path is outside
+          # __repo__/ so repo contents cannot pre-populate it.
+          #
+          # We hash the CONTAINER cwd (what Craft's Node process sees),
+          # not the runner host path. CRAFT_PUBLISH_PATH is either "."
+          # (root) or "./subdir/..." (monorepo); after bash `cd
+          # __repo__/<path>` and Node's process.cwd() canonicalisation,
+          # the cwd is `/github/workspace/__repo__` (root) or
+          # `/github/workspace/__repo__/subdir/...` (monorepo).
+          case "$CRAFT_PUBLISH_PATH" in
+            .|./) container_cwd="/github/workspace/__repo__" ;;
+            ./*) container_cwd="/github/workspace/__repo__/${CRAFT_PUBLISH_PATH#./}" ;;
+            *)   container_cwd="/github/workspace/__repo__/${CRAFT_PUBLISH_PATH}" ;;
+          esac
+          # Strip any trailing slash to match Node's canonicalisation.
+          container_cwd="${container_cwd%/}"
+          cwd_hash="$(printf %s "$container_cwd" | sha1sum | cut -c1-12)"
+          sanitise() { printf %s "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]\+/_/g; s/^_\+//; s/_\+$//'; }
+          owner_sanitised="$(sanitise getsentry)"
+          repo_sanitised="$(sanitise "$CRAFT_PUBLISH_REPO")"
+          version_sanitised="$(sanitise "$CRAFT_PUBLISH_VERSION")"
+          new_state_dir="$GITHUB_WORKSPACE/.craft-state/craft"
+          new_state_file="$new_state_dir/publish-state-${owner_sanitised}-${repo_sanitised}-${cwd_hash}-${version_sanitised}.json"
+          mkdir -p "$new_state_dir"
+          printf %s "$payload" > "$new_state_file"
+          echo "Wrote new-location state file: $new_state_file"
+
+          # Write the LEGACY location for the duration of the rollout so
+          # older Craft images (before the new-location support ships)
+          # keep working. Remove this block after Craft is released with
+          # the new-location read/write and we've confirmed a few
+          # publish runs succeed.
+          legacy_state_file="__repo__/${CRAFT_PUBLISH_PATH}/.craft-publish-${CRAFT_PUBLISH_VERSION}.json"
+          printf %s "$payload" > "$legacy_state_file"
+          echo "Wrote legacy-location state file: $legacy_state_file"
 
       - uses: docker://getsentry/craft:latest
         name: Publish using Craft
@@ -102,6 +146,10 @@ jobs:
             exec craft publish ${{ fromJSON(steps.inputs.outputs.result).version }}
             "
         env:
+          # Pin Craft's publish-state directory to a path outside
+          # __repo__/ so repo contents cannot pre-populate it. See the
+          # `Set targets` step above.
+          XDG_STATE_HOME: /github/workspace/.craft-state
           CRAFT_MERGE_TARGET: ${{ fromJSON(steps.inputs.outputs.result).merge_target }}
           CRAFT_LOG_LEVEL: ${{ vars.CRAFT_LOG_LEVEL || 'Info' }}
           CRAFT_DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}

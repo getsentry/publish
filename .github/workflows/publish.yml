@@ -3,17 +3,115 @@ on:
   issues:
     types: [labeled]
 
+concurrency:
+  # Use the issue title (e.g. "publish: getsentry/foo@1.2.3") so duplicate
+  # issues for the same repo@version share a concurrency group.
+  group: ${{ github.event.issue.title }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   issues: write
   packages: write
 
 jobs:
+  # When accepted is added to a publish issue:
+  #   - Add ci-pending (and remove ci-failed if retrying)
+  #   - Enable the poller via CI_POLLER_HAS_PENDING=true
+  #   - Comment on the issue
+  #   - Trigger the poller immediately so we don't wait for the next cron tick
+  # The publish job below requires ci-ready, so it will not fire until the
+  # poller flips ci-pending → ci-ready (which also prevents publishing without
+  # CI verification in the auto-approve race).
+  waiting-for-ci:
+    runs-on: ubuntu-latest
+    name: Waiting for CI
+    environment: production
+    if: >-
+      github.event.label.name == 'accepted'
+      && github.event.issue.state == 'open'
+      && startsWith(github.event.issue.title, 'publish: ')
+    steps:
+      - name: Get auth token
+        id: token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+
+      # Reset to a clean ci-pending state:
+      # - Remove ci-failed (retries after CI was fixed)
+      # - Remove ci-ready (retries after a publish failure — if we leave
+      #   ci-ready, the poller's later --add-label won't generate a
+      #   labeled event and publish.yml would never fire)
+      # - Add ci-pending
+      # Label ops are idempotent: --add/--remove don't fail if already
+      # added/removed.
+      - name: Mark ci-pending
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label "ci-failed" \
+            --remove-label "ci-ready" \
+            --add-label "ci-pending"
+
+      - name: Comment on issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${{ contains(github.event.issue.labels.*.name, 'ci-failed') }}" == "true" ]]; then
+            body="Retrying — CI was previously failed. Checking CI status now."
+          else
+            body="Approved. Checking CI status on the release branch. Publishing will start automatically when CI passes."
+          fi
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "$body"
+
+      # Best-effort: enable the cron poller. Uses a dedicated app since
+      # sentry-internal-app lacks actions_variables:write.
+      - name: Get poller app token
+        id: poller-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
+
+      - name: Enable cron poller
+        if: steps.poller-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.poller-token.outputs.token }}
+        run: |
+          gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"
+
+      # Trigger the CI poller immediately instead of waiting for the next cron tick.
+      # Uses the app token — GITHUB_TOKEN workflow_dispatch events are suppressed.
+      - name: Trigger CI poller
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh workflow run ci-poller.yml -R "$GITHUB_REPOSITORY"
+
   publish:
     runs-on: ubuntu-latest
     environment: production
     name: Publish a new version
-    if: github.event.label.name == 'accepted' && github.event.issue.state == 'open'
+    # Publish when ci-ready is present (added by the poller after CI passes).
+    # Fires ONLY on ci-ready label events — not accepted — to avoid racing
+    # with waiting-for-ci on the same event. The poller always adds ci-ready
+    # after checking CI (even if ci-ready was already present, waiting-for-ci
+    # removes it first so a fresh labeled event fires), so this gate is
+    # guaranteed to trigger on the happy path.
+    if: >-
+      github.event.issue.state == 'open'
+      && github.event.label.name == 'ci-ready'
+      && contains(github.event.issue.labels.*.name, 'accepted')
+      && contains(github.event.issue.labels.*.name, 'ci-ready')
+      && !contains(github.event.issue.labels.*.name, 'ci-pending')
+      && !contains(github.event.issue.labels.*.name, 'ci-failed')
     timeout-minutes: 90
     env:
       SENTRY_DSN: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838"
@@ -65,9 +163,9 @@ jobs:
 
       - name: Get Release Bot auth token
         id: token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
           owner: getsentry # create token that have access to all repos
 
@@ -153,9 +251,9 @@ jobs:
           CRAFT_MERGE_TARGET: ${{ fromJSON(steps.inputs.outputs.result).merge_target }}
           CRAFT_LOG_LEVEL: ${{ vars.CRAFT_LOG_LEVEL || 'Info' }}
           CRAFT_DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}
-          GIT_COMMITTER_NAME: getsentry-bot
-          GIT_AUTHOR_NAME: getsentry-bot
-          EMAIL: bot@getsentry.com
+          GIT_COMMITTER_NAME: sentry-release-bot[bot]
+          GIT_AUTHOR_NAME: sentry-release-bot[bot]
+          EMAIL: 180476844+sentry-release-bot[bot]@users.noreply.github.com
           GITHUB_TOKEN: ${{ steps.token.outputs.token }}
           # We need to use separate tokens for GHCR.IO and GitHub API access
           # Because we can only access ghcr.io with GITHUB_TOKEN but that token

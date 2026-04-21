@@ -1,0 +1,314 @@
+name: CI Status Poller
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      attempt:
+        description: Self-dispatch attempt counter (internal use)
+        required: false
+        default: "0"
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  check-ci:
+    runs-on: ubuntu-latest
+    environment: production
+    # Skip entirely (no runner provisioned) when there's nothing to check.
+    # Set to "true" by ci-pending.yml, reset to "false" here when done.
+    # Always allow workflow_dispatch for manual recovery.
+    if: vars.CI_POLLER_HAS_PENDING == 'true' || github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: ci-status-poller
+      cancel-in-progress: false
+    steps:
+      # sentry-internal-app token for label changes on this repo.
+      # This token is what triggers publish.yml downstream — see
+      # https://github.com/getsentry/publish for why GITHUB_TOKEN can't.
+      - name: Get auth token
+        id: token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+
+      # sentry-release-bot token for cross-repo API access (check-suites,
+      # status, check-runs). The sentry-internal-app is only installed on
+      # some repos, so it 404s on private repos like sentry-xbox,
+      # sentry-playstation, sentry-switch, service-registry, etc.
+      - name: Get release bot auth token
+        id: release-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          owner: getsentry # create token with access to all getsentry repos
+
+      - name: Check CI status for ci-pending issues
+        env:
+          # Use the sentry-internal-app token for label changes on this
+          # repo (so events trigger publish.yml), and the release bot
+          # token for cross-repo API calls (installed on all getsentry repos).
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_TOKEN: ${{ steps.release-token.outputs.token }}
+        run: |
+          # Helper: gh api using release-bot token (for cross-repo calls).
+          # Uses a subshell so GH_TOKEN override doesn't leak to other calls.
+          # Captures stdout and exits non-zero on API failure (including 404s)
+          # so callers can reliably detect errors.
+          gh_api_release() {
+            local output
+            output=$(GH_TOKEN="$RELEASE_TOKEN" gh api "$@" 2>&1)
+            local exit_code=$?
+            if [[ $exit_code -ne 0 ]]; then
+              echo "::warning::gh api failed: $output" >&2
+              return $exit_code
+            fi
+            printf '%s' "$output"
+          }
+          # Only check issues that have BOTH ci-pending AND accepted labels.
+          # This avoids polling for abandoned releases that nobody approved.
+          issues=$(gh issue list -R "$GITHUB_REPOSITORY" \
+            --state open \
+            --label ci-pending \
+            --label accepted \
+            --limit 200 \
+            --json number,title,labels,body)
+
+          count=$(echo "$issues" | jq length)
+          if [[ "$count" == "0" ]]; then
+            echo "No ci-pending + accepted issues found."
+            exit 0
+          fi
+          echo "Found ${count} ci-pending + accepted issue(s)."
+
+          # Check each issue's CI status
+          echo "$issues" | jq -c '.[]' | while read -r issue; do
+            number=$(echo "$issue" | jq -r '.number')
+            title=$(echo "$issue" | jq -r '.title')
+            body=$(echo "$issue" | jq -r '.body')
+
+            # Parse repo and version from title: "publish: owner/repo[/path]@version"
+            # Only take owner/repo (first two segments) — monorepos like
+            # "getsentry/relay/py@0.9.26" have a path suffix that isn't part
+            # of the GitHub repo name.
+            repo=$(echo "$title" | sed -n 's|^publish: \([^/]*/[^/@]*\).*@.*|\1|p')
+            version=$(echo "$title" | sed -n 's/^publish: .*@\(.*\)/\1/p')
+
+            if [[ -z "$repo" || -z "$version" ]]; then
+              echo "::warning::Could not parse repo/version from issue #${number}: ${title}"
+              continue
+            fi
+
+            # Extract the commit SHA from the "View check runs" link in the issue body.
+            # Link format: https://github.com/{owner}/{repo}/commit/{SHA}/checks/
+            issue_sha=$(echo "$body" | grep -oP '(?<=commit/)[0-9a-f]{40}(?=/checks)' || true)
+
+            if [[ -z "$issue_sha" ]]; then
+              echo "::warning::Could not extract commit SHA from issue #${number} body, skipping."
+              continue
+            fi
+
+            # Resolve the release branch name from the original commit's check
+            # suites (avoids hard-coding "release/{version}" since repos can
+            # customize branch names in their craft config).
+            # Failures are non-fatal — we fall back to the issue SHA below.
+            branch=""
+            if branch_result=$(gh_api_release "repos/${repo}/commits/${issue_sha}/check-suites" \
+              --jq '.check_suites[0].head_branch // empty'); then
+              branch="$branch_result"
+            fi
+
+            if [[ -n "$branch" ]]; then
+              # Resolve the branch HEAD — may differ from issue_sha if a bot
+              # (e.g., auto-fix, skill regeneration) pushed a new commit.
+              # Also non-fatal — falls back to issue SHA.
+              head_sha=""
+              if head_result=$(gh_api_release "repos/${repo}/git/ref/heads/${branch}" \
+                --jq '.object.sha'); then
+                head_sha="$head_result"
+              fi
+
+              if [[ -n "$head_sha" ]]; then
+                sha="$head_sha"
+              else
+                echo "  Could not resolve HEAD of ${branch}, using issue SHA."
+                sha="$issue_sha"
+              fi
+            else
+              echo "  No check suites found for ${issue_sha:0:8}, using issue SHA."
+              sha="$issue_sha"
+            fi
+
+            # If the branch moved (bot pushed a new commit), update the
+            # "View check runs" link in the issue body so it stays accurate
+            # for humans and for subsequent poller runs.
+            if [[ "$sha" != "$issue_sha" ]]; then
+              echo "  Branch ${branch} moved: ${issue_sha:0:8} → ${sha:0:8}. Updating issue."
+              updated_body="${body//${issue_sha}/${sha}}"
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" --body "$updated_body"
+            fi
+
+            echo "Checking CI for ${repo}@${version} commit ${sha:0:8} (issue #${number})..."
+
+            # Check combined commit status ("pending" means statuses exist but
+            # some haven't resolved yet; it does NOT mean "no statuses reported").
+            # Skip the issue entirely if the status API fails (e.g., app isn't
+            # installed on this repo) — don't try to derive state from partial data.
+            if ! status_json=$(gh_api_release "repos/${repo}/commits/${sha}/status"); then
+              echo "  Could not fetch commit status for ${repo}@${sha:0:8}, skipping."
+              continue
+            fi
+            commit_status=$(echo "$status_json" | jq -r '.state')
+            total_statuses=$(echo "$status_json" | jq -r '.total_count')
+
+            # Fetch all check runs (paginate to handle repos with >30 checks).
+            # --paginate --jq applies the filter per-page, so we flatten with
+            # '.check_runs[]' and count with a second jq pass.
+            if ! all_checks=$(gh_api_release --paginate "repos/${repo}/commits/${sha}/check-runs" --jq '.check_runs[]'); then
+              echo "  Could not fetch check runs for ${repo}@${sha:0:8}, skipping."
+              continue
+            fi
+
+            total_checks=$(echo "$all_checks" | jq -s 'length')
+            pending_checks=$(echo "$all_checks" | jq -s '[.[] | select(.status != "completed")] | length')
+            # Count checks with non-successful conclusions (failure, cancelled,
+            # timed_out, action_required, stale, startup_failure).
+            # "success", "neutral", and "skipped" are considered passing.
+            unsuccessful_checks=$(echo "$all_checks" | jq -s '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
+
+            echo "  commit_status=${commit_status} (${total_statuses} statuses) pending=${pending_checks} unsuccessful=${unsuccessful_checks} total=${total_checks}"
+
+            # Require at least one check run or one commit status to exist —
+            # otherwise CI hasn't started yet and all counts would be 0.
+            if [[ "$total_checks" == "0" && "$total_statuses" == "0" ]]; then
+              echo "  No check runs or commit statuses found — CI may not have started yet."
+              continue
+            fi
+
+            # CI is ready when:
+            #   - commit status is "success" or no statuses were reported (some
+            #     repos use only check runs, not commit statuses)
+            #   - all check runs are completed (none pending)
+            #   - no check runs have unsuccessful conclusions
+            status_ok=false
+            if [[ "$commit_status" == "success" ]]; then
+              status_ok=true
+            elif [[ "$total_statuses" == "0" ]]; then
+              # No commit statuses reported — repo uses only check runs
+              status_ok=true
+            fi
+
+            if [[ "$status_ok" == "true" \
+                  && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
+
+              echo "  CI passed! Adding ci-ready label."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --add-label "ci-ready"
+
+              # We only poll issues that have both ci-pending and accepted,
+              # so publishing will start as soon as ci-ready is added.
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                --body "CI checks passed for ${repo}@${version}. Publishing is starting now."
+
+            elif [[ "$pending_checks" == "0" && "$unsuccessful_checks" != "0" ]]; then
+              # All checks completed but some failed.
+              # Swap ci-pending → ci-failed, remove accepted to stop polling.
+              # The author must fix CI and re-add accepted to retry.
+              echo "  CI failed! Swapping ci-pending → ci-failed and removing accepted."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --remove-label "accepted" \
+                --add-label "ci-failed"
+
+              failed_names=$(echo "$all_checks" | jq -rs '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | .name] | join(", ")')
+              comment_body="CI checks **failed** for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed checks: ${failed_names}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
+
+            elif [[ "$commit_status" == "failure" && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
+              # All check runs passed but commit statuses reported a failure.
+              echo "  CI failed (commit status)! Swapping ci-pending → ci-failed and removing accepted."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --remove-label "accepted" \
+                --add-label "ci-failed"
+
+              failed_contexts=$(echo "$status_json" \
+                | jq -r '[.statuses[] | select(.state == "failure" or .state == "error")] | map(.context + " (" + .state + ")") | join(", ")')
+              comment_body="CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed status checks: ${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
+            fi
+          done
+
+      # Cleanup: check if we should disable the poller. Runs even if the
+      # CI check step above failed, so CI_POLLER_HAS_PENDING doesn't get
+      # stuck on "true" permanently.
+      - name: Check for remaining pending issues
+        if: always()
+        id: remaining
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh issue list -R "$GITHUB_REPOSITORY" \
+            --state open \
+            --label ci-pending \
+            --label accepted \
+            --limit 1 \
+            --json number -q 'length')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+
+      # Update the poller variable to match reality:
+      # - Remaining issues → ensure variable is "true" (important when
+      #   workflow_dispatch bypassed the gate while variable was "false")
+      # - No remaining issues → set to "false" to stop the cron
+      # Placed after CI check so a token failure can't block CI checking.
+      - name: Get poller app token
+        if: always()
+        id: poller-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
+
+      - name: Sync poller variable with pending issue state
+        if: always() && steps.poller-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.poller-token.outputs.token }}
+        run: |
+          if [[ "${{ steps.remaining.outputs.count }}" == "0" ]]; then
+            echo "All ci-pending issues resolved. Disabling poller."
+            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"
+          else
+            echo "Still pending issues. Ensuring poller stays enabled."
+            gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"
+          fi
+
+      # Self-dispatch for fast re-checking when issues are still pending.
+      # GitHub's cron is unreliable (*/5 can drift to 30-40 min under load).
+      # Self-dispatch gives ~30-60s between checks via GHA startup latency.
+      # The concurrency group prevents accumulation (1 running + 1 queued).
+      # Cap at 60 attempts (~30 min). If CI hasn't passed by then, the cron
+      # fallback continues checking and the chain restarts on the next
+      # manual trigger (accepted label re-added or workflow_dispatch).
+      - name: Self-dispatch if issues remain pending
+        if: >-
+          always()
+          && steps.token.outcome == 'success'
+          && steps.remaining.outcome == 'success'
+          && steps.remaining.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          ATTEMPT: ${{ github.event.inputs.attempt || '0' }}
+        run: |
+          attempt=$((ATTEMPT + 1))
+          if [[ "$attempt" -ge 60 ]]; then
+            echo "::warning::Max self-dispatch attempts (60) reached. Relying on cron fallback."
+            exit 0
+          fi
+          echo "Re-dispatching (attempt ${attempt}/60)..."
+          gh workflow run ci-poller.yml -R "$GITHUB_REPOSITORY" -f attempt="${attempt}"

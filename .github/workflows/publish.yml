@@ -188,11 +188,11 @@ jobs:
           CRAFT_PUBLISH_VERSION: ${{ fromJSON(steps.inputs.outputs.result).version }}
           CRAFT_PUBLISH_TARGETS_JSON: ${{ toJSON(fromJSON(steps.inputs.outputs.result).targets) }}
         run: |
-          # Render the "already published" JSON once, reuse twice.
+          # Render the "already published" JSON.
           payload="$(jq -n --argjson source "$CRAFT_PUBLISH_TARGETS_JSON" '[{($source[]): true }] | add | {"published": (. // {}) }')"
 
-          # Write the NEW location Craft reads from (post
-          # getsentry/craft#795). Craft sees cwd
+          # Write the state file to the safe location Craft reads from
+          # (getsentry/craft#797, released in 2.26.0). Craft sees cwd
           # `/github/workspace/__repo__/<path>` inside the container;
           # the state dir is pinned to `$GITHUB_WORKSPACE/.craft-state`
           # (mapped to `/github/workspace/.craft-state` in the
@@ -217,20 +217,11 @@ jobs:
           owner_sanitised="$(sanitise getsentry)"
           repo_sanitised="$(sanitise "$CRAFT_PUBLISH_REPO")"
           version_sanitised="$(sanitise "$CRAFT_PUBLISH_VERSION")"
-          new_state_dir="$GITHUB_WORKSPACE/.craft-state/craft"
-          new_state_file="$new_state_dir/publish-state-${owner_sanitised}-${repo_sanitised}-${cwd_hash}-${version_sanitised}.json"
-          mkdir -p "$new_state_dir"
-          printf %s "$payload" > "$new_state_file"
-          echo "Wrote new-location state file: $new_state_file"
-
-          # Write the LEGACY location for the duration of the rollout so
-          # older Craft images (before the new-location support ships)
-          # keep working. Remove this block after Craft is released with
-          # the new-location read/write and we've confirmed a few
-          # publish runs succeed.
-          legacy_state_file="__repo__/${CRAFT_PUBLISH_PATH}/.craft-publish-${CRAFT_PUBLISH_VERSION}.json"
-          printf %s "$payload" > "$legacy_state_file"
-          echo "Wrote legacy-location state file: $legacy_state_file"
+          state_dir="$GITHUB_WORKSPACE/.craft-state/craft"
+          state_file="$state_dir/publish-state-${owner_sanitised}-${repo_sanitised}-${cwd_hash}-${version_sanitised}.json"
+          mkdir -p "$state_dir"
+          printf %s "$payload" > "$state_file"
+          echo "Wrote state file: $state_file"
 
       - uses: docker://getsentry/craft:latest
         name: Publish using Craft

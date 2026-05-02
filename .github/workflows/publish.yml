@@ -157,9 +157,12 @@ jobs:
           fromJSON(steps.inputs.outputs.result).repo == 'sentry-wizard' && fromJSON(steps.inputs.outputs.result).merge_target == '1.x' ||
           false
         id: target-repo-branch
+        env:
+          MERGE_TARGET: ${{ fromJSON(steps.inputs.outputs.result).merge_target }}
+          REPO: ${{ fromJSON(steps.inputs.outputs.result).repo }}
         run: |
-          echo 'taking craft config from branch ${{ fromJSON(steps.inputs.outputs.result).merge_target }} in ${{ fromJSON(steps.inputs.outputs.result).repo }}'
-          echo 'target_repo_branch=${{ fromJSON(steps.inputs.outputs.result).merge_target }}' >> "$GITHUB_OUTPUT"
+          echo "taking craft config from branch \"$MERGE_TARGET\" in \"$REPO\""
+          echo "target_repo_branch=$MERGE_TARGET" >> "$GITHUB_OUTPUT"
 
       - name: Get Release Bot auth token
         id: token

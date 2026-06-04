@@ -1,18 +1,8 @@
 name: Publish (debug)
 on:
-  workflow_dispatch:
-    inputs:
-      repo:
-        description: "Target repo (e.g. streams)"
-        required: true
-      path:
-        description: "Path within repo (e.g. ./sentry_streams)"
-        required: true
-        default: "."
-      merge_target:
-        description: "Merge target branch (leave empty if none)"
-        required: false
-        default: ""
+  push:
+    branches:
+      - sentry-streams-twine-400
 
 permissions:
   contents: read
@@ -55,7 +45,7 @@ jobs:
         name: Check out target repo
         with:
           path: __repo__
-          repository: getsentry/${{ inputs.repo }}
+          repository: getsentry/streams
           token: ${{ steps.token.outputs.token }}
           fetch-depth: 0
 
@@ -67,12 +57,12 @@ jobs:
             -e
             -c "
             export HOME=/root &&
-            cd __repo__/${{ inputs.path }} &&
+            cd __repo__/sentry_streams &&
             exec craft publish 0.0.56
             "
         env:
           XDG_STATE_HOME: /github/workspace/.craft-state
-          CRAFT_MERGE_TARGET: ${{ inputs.merge_target }}
+          CRAFT_MERGE_TARGET: ""
           CRAFT_LOG_LEVEL: ${{ vars.CRAFT_LOG_LEVEL || 'Info' }}
           CRAFT_DRY_RUN: "false"
           TWINE_VERBOSE: "1"

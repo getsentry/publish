@@ -264,6 +264,7 @@ jobs:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          TWINE_VERBOSE: "1"
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GEM_HOST_API_KEY: ${{ secrets.GEM_HOST_API_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

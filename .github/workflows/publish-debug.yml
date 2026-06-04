@@ -1,0 +1,105 @@
+name: Publish (debug)
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Target repo (e.g. streams)"
+        required: true
+      path:
+        description: "Path within repo (e.g. ./sentry_streams)"
+        required: true
+        default: "."
+      merge_target:
+        description: "Merge target branch (leave empty if none)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+  packages: write
+
+jobs:
+  publish-debug:
+    runs-on: ubuntu-latest
+    environment: production
+    name: Publish (debug dry-run)
+    timeout-minutes: 90
+    env:
+      SENTRY_DSN: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838"
+    steps:
+      - name: Get repo contents
+        uses: actions/checkout@v6
+        with:
+          path: .__publish__
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: .__publish__/yarn.lock
+
+      - name: Install yarn dependencies
+        run: yarn install --cwd ".__publish__"
+
+      - name: Get Release Bot auth token
+        id: token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          owner: getsentry
+
+      - uses: actions/checkout@v6
+        name: Check out target repo
+        with:
+          path: __repo__
+          repository: getsentry/${{ inputs.repo }}
+          token: ${{ steps.token.outputs.token }}
+          fetch-depth: 0
+
+      - uses: docker://getsentry/craft:latest
+        name: Publish using Craft (dry-run + verbose twine)
+        with:
+          entrypoint: /bin/bash
+          args: >-
+            -e
+            -c "
+            export HOME=/root &&
+            cd __repo__/${{ inputs.path }} &&
+            exec craft publish 0.0.56
+            "
+        env:
+          XDG_STATE_HOME: /github/workspace/.craft-state
+          CRAFT_MERGE_TARGET: ${{ inputs.merge_target }}
+          CRAFT_LOG_LEVEL: ${{ vars.CRAFT_LOG_LEVEL || 'Info' }}
+          CRAFT_DRY_RUN: "false"
+          TWINE_VERBOSE: "1"
+          GIT_COMMITTER_NAME: sentry-release-bot[bot]
+          GIT_AUTHOR_NAME: sentry-release-bot[bot]
+          EMAIL: 180476844+sentry-release-bot[bot]@users.noreply.github.com
+          GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          DOCKER_GHCR_IO_USERNAME: x-access-token
+          DOCKER_GHCR_IO_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+          CRAFT_GCS_TARGET_CREDS_JSON: ${{ secrets.CRAFT_GCS_TARGET_CREDS_JSON }}
+          CRAFT_GCS_STORE_CREDS_JSON: ${{ secrets.CRAFT_GCS_STORE_CREDS_JSON }}
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+          DOCKER_USERNAME: sentrybuilder
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GEM_HOST_API_KEY: ${{ secrets.GEM_HOST_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          NUGET_API_TOKEN: ${{ secrets.NUGET_API_TOKEN }}
+          POWERSHELL_API_KEY: ${{ secrets.POWERSHELL_API_KEY }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          PUBDEV_ACCESS_TOKEN: ${{ secrets.PUBDEV_ACCESS_TOKEN }}
+          PUBDEV_REFRESH_TOKEN: ${{ secrets.PUBDEV_REFRESH_TOKEN }}

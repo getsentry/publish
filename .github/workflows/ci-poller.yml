@@ -239,8 +239,8 @@ jobs:
                 --add-label "ci-failed"
 
               failed_contexts=$(echo "$status_json" \
-                | jq -r '[.statuses[] | select(.state == "failure" or .state == "error")] | map(.context + " (" + .state + ")") | join(", ")')
-              comment_body="CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed status checks: ${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
+                | jq -r '[.statuses[] | select(.state == "failure" or .state == "error")] | map(if .target_url and .target_url != "" and .target_url != "null" then "- [" + .context + "](" + .target_url + ") (" + .state + ")" else "- " + .context + " (" + .state + ")" end) | join("\n")')
+              comment_body="CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed status checks:"$'\n'"${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
             fi
           done

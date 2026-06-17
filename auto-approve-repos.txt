@@ -35,3 +35,12 @@ getsentry/symbolic
 getsentry/taskbroker/clients
 getsentry/usage-accountant
 getsentry/watto
+getsentry/sentry
+getsentry/snuba
+getsentry/vroom
+getsentry/relay
+getsentry/symbolicator
+getsentry/taskbroker
+getsentry/uptime-checker
+getsentry/launchpad
+getsentry/self-hosted

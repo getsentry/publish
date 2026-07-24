@@ -6,7 +6,7 @@
   "main": "index.js",
   "repository": "git@github.com:getsentry/publish.git",
   "author": "Sentry Open Source <oss@sentry.io>",
-  "license": "Apache-2",
+  "license": "Apache-2.0",
   "volta": {
     "node": "24.0.0",
     "yarn": "1.22.22"

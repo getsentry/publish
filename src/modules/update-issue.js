@@ -39,7 +39,7 @@ function transformIssueBody(craftState, issueBody) {
   return issueBody.replace(
     TARGETS_SECTION_PARSER_REGEX,
     (targetsSection) => {
-      let targetsText = targetsSection.trimRight();
+      let targetsText = targetsSection.trimEnd();
       targetsText = targetsText.replace(
         TARGETS_PARSER_REGEX,
         (_match, targetId) => {

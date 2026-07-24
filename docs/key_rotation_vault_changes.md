@@ -10,7 +10,7 @@ Currently there are three vaults that contain secrets:
 
 We do not want employees to publish through their own accounts, but we also do not want them to have access to the global credentials. We have enabled the first part of this process as the preparation of releases no longer requires credentials when [Craft](https://github.com/getsentry/craft) is used.
 
-The actual publish via Craft however still requires access to the credentials. For that process we need to ensure that craft doesn't have to run on employee's machines but somewhere, where access tokens cannot be accessed but approved engineers can click publish. Who is approved will depend on the project. For instance SDKs must not be published without a manager, other code bases might even want to perform automatic publishing (eg: [sentry](https://github.com/getsentry/sentry) itself).
+The actual publish via Craft however still requires access to the credentials. For that process we need to ensure that craft doesn't have to run on employees' machines but somewhere, where access tokens cannot be accessed but approved engineers can click publish. Who is approved will depend on the project. For instance SDKs must not be published without a manager, other code bases might even want to perform automatic publishing (eg: [sentry](https://github.com/getsentry/sentry) itself).
 
 ## Proposed Setup
 

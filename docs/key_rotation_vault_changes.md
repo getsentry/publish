@@ -24,7 +24,7 @@ Ways to improve credential management for releases:
 
 ### GitHub Actions in Separate Repo
 
-1. Centralize all release actions in a single, restricted-acces repo
+1. Centralize all release actions in a single, restricted-access repo
 2. Only add the bare-minimum personnel to this repo as admins (or with write access)
 3. Only expose the credentials/tokens to this repo
 4. At this stage, all releases access tokens are restricted to a few people

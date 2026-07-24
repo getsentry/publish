@@ -1,6 +1,6 @@
 # [RFC] Central Publish Repository
 
-This design document is written to address the concerns mentioned in [Key Rotation & Vault Changes](key_rotation_vault_changes.md). Implementation pending feedback from engineering team members, specifically SDK team.
+This design document is written to address the concerns mentioned in [Key Rotation & Vault Changes](key_rotation_vault_changes.md). Implementation pending feedback from engineering team members, specifically the SDK team.
 
 # Problem Statement
 

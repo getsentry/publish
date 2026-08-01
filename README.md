@@ -86,7 +86,7 @@ Packages we release into the wider world that our customers install, require an 
 `sentry-cli`, our SDKs or the `symbolicator` distributed utilities. Internal dependencies such as `arroyo` can be published
 with an auto approval. The reasoning here is that the bump of the dependency requires an explicit approval again in Sentry
 proper. In theory if an independent package gets sufficient independent use of Sentry we might want to reconsider an auto
-approval process for such package as it might become an interesting target for an attacker.
+approval process for such a package as it might become an interesting target for an attacker.
 
 Automatic approvals are managed in the [`auto-approve.yml`](https://github.com/getsentry/publish/blob/main/.github/workflows/auto-approve.yml) workflow.
 

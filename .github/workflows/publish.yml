@@ -257,6 +257,7 @@ jobs:
           DOCKER_GHCR_IO_USERNAME: x-access-token # for ghcr.io auth
           DOCKER_GHCR_IO_PASSWORD: ${{ secrets.GITHUB_TOKEN }} # for ghcr.io auth
           GITHUB_API_TOKEN: ${{ steps.token.outputs.token }} # for commit-on-repo token
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
           CRAFT_GCS_TARGET_CREDS_JSON: ${{ secrets.CRAFT_GCS_TARGET_CREDS_JSON }}
           CRAFT_GCS_STORE_CREDS_JSON: ${{ secrets.CRAFT_GCS_STORE_CREDS_JSON }}

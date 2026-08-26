@@ -36,7 +36,7 @@ Assign the **accepted** label to this issue to approve the release.
 
 test("parse inputs", async () => {
   const result = await detailsFromContext(inputsArgs);
-  expect(result).toEqual({
+  expect(result).toStrictEqual({
     dry_run: "",
     merge_target: "custom-branch",
     path: ".",
@@ -91,7 +91,7 @@ Assign the **accepted** label to this issue to approve the release.
 
 test("Do not extract merge_target value if its a default value", async () => {
   const result = await detailsFromContext(defaultTargetInputsArgs);
-  expect(result).toEqual({
+  expect(result).toStrictEqual({
     dry_run: "",
     merge_target: "",
     path: ".",
@@ -99,6 +99,214 @@ test("Do not extract merge_target value if its a default value", async () => {
     targets: ["github", "docker[latest]"],
     version: "21.3.1",
   });
+});
+
+test("parses a human-readable workspace from the title", async () => {
+  const result = await detailsFromContext({
+    context: {
+      repo: { owner: "getsentry", repo: "publish" },
+      payload: {
+        issue: {
+          number: "123",
+          title: 'publish: getsentry/toolkit [workspace: "cli/v2"] @1.2.3',
+          body: "Requested by: @example",
+          labels: [],
+        },
+      },
+    },
+  });
+
+  expect(result).toMatchObject({
+    repo: "toolkit",
+    version: "1.2.3",
+    workspace: "cli/v2",
+  });
+});
+
+test("parses escaped workspace characters from the title", async () => {
+  const result = await detailsFromContext({
+    context: {
+      repo: { owner: "getsentry", repo: "publish" },
+      payload: {
+        issue: {
+          number: "123",
+          title:
+            'publish: getsentry/toolkit [workspace: "cli [preview] \\"next\\""] @1.2.3',
+          body: "Requested by: @example",
+          labels: [],
+        },
+      },
+    },
+  });
+
+  expect(result.workspace).toBe('cli [preview] "next"');
+});
+
+test("parses a safe Unicode workspace from the title", async () => {
+  const result = await detailsFromContext({
+    context: {
+      repo: { owner: "getsentry", repo: "publish" },
+      payload: {
+        issue: {
+          number: "123",
+          title:
+            'publish: getsentry/toolkit [workspace: "cli-\u65e5\u672c\u8a9e"] @1.2.3',
+          body: "Requested by: @example",
+          labels: [],
+        },
+      },
+    },
+  });
+
+  expect(result.workspace).toBe("cli-\u65e5\u672c\u8a9e");
+});
+
+test("rejects a legacy title with an unexpected space before its version", async () => {
+  const fn = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title: "publish: getsentry/toolkit @1.2.3",
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+
+  await expect(fn).rejects.toThrow("Invalid publish issue title");
+});
+
+test("rejects an empty or unsafe Unicode workspace", async () => {
+  const emptyWorkspace = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title: 'publish: getsentry/toolkit [workspace: ""] @1.2.3',
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+  const multilineWorkspace = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title:
+              'publish: getsentry/toolkit [workspace: "cli\\nnext"] @1.2.3',
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+  const nulWorkspace = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title: 'publish: getsentry/toolkit [workspace: "\\u0000"] @1.2.3',
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+  const tabWorkspace = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title:
+              'publish: getsentry/toolkit [workspace: "cli\\tnext"] @1.2.3',
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+  const bidiWorkspace = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title:
+              'publish: getsentry/toolkit [workspace: "cli\\u202enext"] @1.2.3',
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+  const lineSeparatorWorkspace = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title:
+              'publish: getsentry/toolkit [workspace: "cli\\u2028next"] @1.2.3',
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+  const paragraphSeparatorWorkspace = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title:
+              'publish: getsentry/toolkit [workspace: "cli\\u2029next"] @1.2.3',
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+
+  await expect(emptyWorkspace).rejects.toThrow(
+    "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"
+  );
+  await expect(multilineWorkspace).rejects.toThrow(
+    "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"
+  );
+  await expect(nulWorkspace).rejects.toThrow(
+    "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"
+  );
+  await expect(tabWorkspace).rejects.toThrow(
+    "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"
+  );
+  await expect(bidiWorkspace).rejects.toThrow(
+    "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"
+  );
+  await expect(lineSeparatorWorkspace).rejects.toThrow(
+    "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"
+  );
+  await expect(paragraphSeparatorWorkspace).rejects.toThrow(
+    "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"
+  );
+});
+
+test("rejects a path that escapes the target checkout", async () => {
+  const fn = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title: "publish: getsentry/toolkit/../other@1.2.3",
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+
+  await expect(fn).rejects.toThrow("Invalid publish issue path");
 });
 
 test("throw error when context is missing the issue payload", async () => {

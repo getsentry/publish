@@ -22,12 +22,30 @@ async function detailsFromContext({ context }) {
   }
 
   const titleParser =
-    /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./-]+)?@(?<version>[\w.+-]+)$/;
-  const titleMatch = context.payload.issue.title.match(titleParser).groups;
+    /^publish: (?:getsentry\/)?(?<repo>[A-Za-z0-9_.-]+)(?<path>\/[\w./-]+)?(?: \[workspace: (?<workspace>"(?:[^"\\]|\\.)*")\] )?@(?<version>[\w.+-]+)$/;
+  const titleMatch = context.payload.issue.title.match(titleParser);
+  if (!titleMatch || !titleMatch.groups) {
+    throw new Error(
+      `Invalid publish issue title: '${context.payload.issue.title}'`
+    );
+  }
+  const { workspace: workspaceJson, ...titleDetails } = titleMatch.groups;
+  let workspace = "";
+  if (workspaceJson) {
+    workspace = JSON.parse(workspaceJson);
+    if (!workspace || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(workspace)) {
+      throw new Error(
+        "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"
+      );
+    }
+  }
   const dry_run = context.payload.issue.labels.some((l) => l.name === "dry-run")
     ? "1"
     : "";
-  const path = "." + (titleMatch.path || "");
+  const path = "." + (titleDetails.path || "");
+  if (path.split("/").includes("..")) {
+    throw new Error(`Invalid publish issue path: '${path}'`);
+  }
 
   // https://docs.github.com/en/get-started/using-git/dealing-with-special-characters-in-branch-and-tag-names#naming-branches-and-tags
   const mergeTargetParser = /^Merge target: (?<merge_target>[\w.\-/]+)$/m;
@@ -48,11 +66,12 @@ async function detailsFromContext({ context }) {
   }
 
   return {
-    ...titleMatch,
+    ...titleDetails,
     dry_run,
     merge_target,
     path,
     targets,
+    ...(workspace ? { workspace } : {}),
   };
 }
 

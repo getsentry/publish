@@ -184,12 +184,14 @@ jobs:
           fetch-depth: 0
 
       - name: Set targets
+        id: craft-state
         shell: bash
         if: fromJSON(steps.inputs.outputs.result).targets
         env:
           CRAFT_PUBLISH_REPO: ${{ fromJSON(steps.inputs.outputs.result).repo }}
           CRAFT_PUBLISH_PATH: ${{ fromJSON(steps.inputs.outputs.result).path }}
           CRAFT_PUBLISH_VERSION: ${{ fromJSON(steps.inputs.outputs.result).version }}
+          CRAFT_PUBLISH_WORKSPACE: ${{ fromJSON(steps.inputs.outputs.result).workspace || '' }}
           CRAFT_PUBLISH_TARGETS_JSON: ${{ toJSON(fromJSON(steps.inputs.outputs.result).targets) }}
         run: |
           # Render the "already published" JSON.
@@ -209,22 +211,26 @@ jobs:
           # __repo__/<path>` and Node's process.cwd() canonicalisation,
           # the cwd is `/github/workspace/__repo__` (root) or
           # `/github/workspace/__repo__/subdir/...` (monorepo).
-          case "$CRAFT_PUBLISH_PATH" in
-            .|./) container_cwd="/github/workspace/__repo__" ;;
-            ./*) container_cwd="/github/workspace/__repo__/${CRAFT_PUBLISH_PATH#./}" ;;
-            *)   container_cwd="/github/workspace/__repo__/${CRAFT_PUBLISH_PATH}" ;;
-          esac
-          # Strip any trailing slash to match Node's canonicalisation.
-          container_cwd="${container_cwd%/}"
+          container_cwd="$(realpath -m "/github/workspace/__repo__/$CRAFT_PUBLISH_PATH")"
+          if [[ "$container_cwd" != "/github/workspace/__repo__" && "$container_cwd" != /github/workspace/__repo__/* ]]; then
+            echo "::error::Publish path must remain inside the target checkout."
+            exit 1
+          fi
           cwd_hash="$(printf %s "$container_cwd" | sha1sum | cut -c1-12)"
           sanitise() { printf %s "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]\+/_/g; s/^_\+//; s/_\+$//'; }
           owner_sanitised="$(sanitise getsentry)"
           repo_sanitised="$(sanitise "$CRAFT_PUBLISH_REPO")"
           version_sanitised="$(sanitise "$CRAFT_PUBLISH_VERSION")"
+          workspace_prefix=""
+          if [[ -n "$CRAFT_PUBLISH_WORKSPACE" ]]; then
+            workspace_encoded="$(printf %s "$CRAFT_PUBLISH_WORKSPACE" | base64 -w 0 | tr '+/' '-_' | tr -d '=')"
+            workspace_prefix="workspace-${workspace_encoded}-"
+          fi
           state_dir="$GITHUB_WORKSPACE/.craft-state/craft"
-          state_file="$state_dir/publish-state-${owner_sanitised}-${repo_sanitised}-${cwd_hash}-${version_sanitised}.json"
+          state_file="$state_dir/publish-state-${owner_sanitised}-${repo_sanitised}-${cwd_hash}-${workspace_prefix}${version_sanitised}.json"
           mkdir -p "$state_dir"
           printf %s "$payload" > "$state_file"
+          echo "state_file=$state_file" >> "$GITHUB_OUTPUT"
           echo "Wrote state file: $state_file"
 
       - uses: docker://getsentry/craft:latest
@@ -246,6 +252,10 @@ jobs:
           CRAFT_MERGE_TARGET: ${{ fromJSON(steps.inputs.outputs.result).merge_target }}
           CRAFT_LOG_LEVEL: ${{ vars.CRAFT_LOG_LEVEL || 'Info' }}
           CRAFT_DRY_RUN: ${{ fromJSON(steps.inputs.outputs.result).dry_run }}
+          CRAFT_WORKSPACE: ${{ fromJSON(steps.inputs.outputs.result).workspace || '' }}
+          # State must follow the issue checkout identity, not a workspace's
+          # optional GitHub release-repository override.
+          CRAFT_PUBLISH_STATE_GITHUB_REPO: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
           GIT_COMMITTER_NAME: sentry-release-bot[bot]
           GIT_AUTHOR_NAME: sentry-release-bot[bot]
           EMAIL: 180476844+sentry-release-bot[bot]@users.noreply.github.com
@@ -287,6 +297,7 @@ jobs:
         if: ${{ cancelled() || failure() }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
+          CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.state_file }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/update-issue.js
 

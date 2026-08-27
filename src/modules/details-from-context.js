@@ -32,7 +32,13 @@ async function detailsFromContext({ context }) {
   const { workspace: workspaceJson, ...titleDetails } = titleMatch.groups;
   let workspace = "";
   if (workspaceJson) {
-    workspace = JSON.parse(workspaceJson);
+    try {
+      workspace = JSON.parse(workspaceJson);
+    } catch {
+      throw new Error(
+        `Invalid publish workspace JSON in title: '${context.payload.issue.title}'`
+      );
+    }
     if (!workspace || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(workspace)) {
       throw new Error(
         "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"

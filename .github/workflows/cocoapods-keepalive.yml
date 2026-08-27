@@ -1,4 +1,4 @@
-name: "CocoaPods Token Keep-Alive"
+name: CocoaPods Token Keep-Alive
 
 on:
   schedule:

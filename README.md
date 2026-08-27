@@ -39,6 +39,11 @@ flowchart TD
 1. Observe the issue for information about the triggered run
 1. The issue will automatically be closed when publishing succeeds
 
+## Publish Issue Format
+
+The release workflow creates publish requests with a stable title and body contract. See
+[Publish Issue Format](docs/publish-issue-format.md) for the accepted syntax and fields.
+
 ## CalVer
 
 To enable calendar versioning, add the following to your `.craft.yml`:

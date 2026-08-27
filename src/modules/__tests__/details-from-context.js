@@ -178,6 +178,24 @@ test("rejects a legacy title with an unexpected space before its version", async
   await expect(fn).rejects.toThrow("Invalid publish issue title");
 });
 
+test("rejects an invalid JSON workspace escape with a clear error", async () => {
+  const fn = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title:
+              'publish: getsentry/toolkit [workspace: "cli\\qnext"] @1.2.3',
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+
+  await expect(fn).rejects.toThrow("Invalid publish workspace JSON in title");
+});
+
 test("rejects an empty or unsafe Unicode workspace", async () => {
   const emptyWorkspace = () =>
     detailsFromContext({

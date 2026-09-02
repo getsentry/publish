@@ -123,6 +123,26 @@ test("parses a human-readable workspace from the title", async () => {
   });
 });
 
+test("rejects a legacy workspace with a non-root path", async () => {
+  const fn = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title:
+              'publish: getsentry/toolkit/packages/cli [workspace: "cli/v2"] @1.2.3',
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+
+  await expect(fn).rejects.toThrow(
+    "A publish workspace must use the repository root path."
+  );
+});
+
 test("parses escaped workspace characters from the title", async () => {
   const result = await detailsFromContext({
     context: {

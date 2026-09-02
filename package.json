@@ -15,7 +15,9 @@
     "undici": "^6.23.0"
   },
   "scripts": {
-    "test": "vitest run",
+    "generate": "node scripts/generate-publish-issue-title-parser.js",
+    "check:generated": "node scripts/generate-publish-issue-title-parser.js --check",
+    "test": "yarn check:generated && vitest run",
     "test:watch": "vitest",
     "lint": "eslint src .github --ignore-pattern '!.github'",
     "prettier": "prettier --write src"
@@ -24,6 +26,7 @@
     "eslint": "^8.9.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-yml": "^0.13.0",
+    "peggy": "5.1.0",
     "prettier": "^2.2.1",
     "vitest": "^4.1.0"
   },

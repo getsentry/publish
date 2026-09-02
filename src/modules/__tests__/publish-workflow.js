@@ -5,13 +5,19 @@ import { join } from "path";
 
 import { afterEach, expect, test } from "vitest";
 
+const { resolvePublishLocation } = require("../publish-location.js");
+
 const temporaryDirectories = [];
 
-function getSetTargetsScript() {
-  const workflow = readFileSync(
+function getWorkflow() {
+  return readFileSync(
     join(__dirname, "../../../.github/workflows/publish.yml"),
     "utf8"
   );
+}
+
+function getSetTargetsScript() {
+  const workflow = getWorkflow();
   const section = workflow.match(
     / {6}- name: Set targets[\s\S]*? {8}run: \|\n(?<script>[\s\S]*?)\n {6}- uses: docker:\/\/getsentry\/craft:latest/
   );
@@ -54,6 +60,40 @@ afterEach(() => {
   }
 });
 
+test("uses the CI-approved revision for checkout, location resolution, and publishing", () => {
+  const workflow = getWorkflow();
+  const revision = workflow.indexOf(
+    "name: Resolve CI-approved release revision"
+  );
+  const informStart = workflow.indexOf("name: Inform start");
+  const checkout = workflow.indexOf("name: Check out target repo");
+  const location = workflow.indexOf("name: Resolve publish location");
+  const state = workflow.indexOf("name: Set targets");
+  const publish = workflow.indexOf("name: Publish using Craft");
+
+  expect(checkout).toBeGreaterThan(-1);
+  expect(informStart).toBeGreaterThan(revision);
+  expect(checkout).toBeGreaterThan(informStart);
+  expect(location).toBeGreaterThan(checkout);
+  expect(state).toBeGreaterThan(location);
+  expect(publish).toBeGreaterThan(state);
+  expect(workflow).toContain(
+    "ref: ${{ steps.release-revision.outputs.revision }}"
+  );
+  expect(workflow).toContain("getsentry/craft:latest workspace list");
+  expect(workflow).toContain('if [[ "$requires_workspace_discovery" == "true"');
+  expect(workflow).not.toContain("getsentry/craft:2.31.0");
+  expect(workflow).toContain(
+    "CRAFT_PUBLISH_PATH: ${{ fromJSON(steps.location.outputs.result).path }}"
+  );
+  expect(workflow).toContain(
+    "CRAFT_PUBLISH_WORKSPACE: ${{ fromJSON(steps.location.outputs.result).workspace || '' }}"
+  );
+  expect(workflow).toContain(
+    "craft publish ${{ fromJSON(steps.inputs.outputs.result).version }} --rev ${{ steps.release-revision.outputs.revision }}"
+  );
+});
+
 test("uses Craft's legacy root state filename", () => {
   const { stateFile, state } = runSetTargets({
     path: ".",
@@ -68,15 +108,19 @@ test("uses Craft's legacy root state filename", () => {
 });
 
 test("matches Craft's workspace state filename for a monorepo release", () => {
-  const { stateFile, state } = runSetTargets({
+  const location = resolvePublishLocation({
     path: "./cli",
+    workspaceNames: ["cli"],
+  });
+  const { stateFile, state } = runSetTargets({
+    path: location.path,
     repo: "toolkit",
     version: "1.2.3",
-    workspace: "cli",
+    workspace: location.workspace,
   });
 
   expect(stateFile).toMatch(
-    /\.craft-state\/craft\/publish-state-getsentry-toolkit-21cf7beaeda4-workspace-Y2xp-1\.2\.3\.json$/
+    /\.craft-state\/craft\/publish-state-getsentry-toolkit-c232c383e26f-workspace-Y2xp-1\.2\.3\.json$/
   );
   expect(JSON.parse(state)).toEqual({ published: { github: true } });
 });

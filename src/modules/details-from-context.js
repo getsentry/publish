@@ -1,3 +1,5 @@
+const { parse: parsePublishIssueTitle } = require("./publish-issue-title");
+
 /**
  * Matches the entire "Targets" section of a github publish issue body.
  */
@@ -21,15 +23,15 @@ async function detailsFromContext({ context }) {
     throw new Error("Issue context is not defined");
   }
 
-  const titleParser =
-    /^publish: (?:getsentry\/)?(?<repo>[A-Za-z0-9_.-]+)(?<path>\/[\w./-]+)?(?: \[workspace: (?<workspace>"(?:[^"\\]|\\.)*")\] )?@(?<version>[\w.+-]+)$/;
-  const titleMatch = context.payload.issue.title.match(titleParser);
-  if (!titleMatch || !titleMatch.groups) {
+  let titleDetails;
+  try {
+    titleDetails = parsePublishIssueTitle(context.payload.issue.title);
+  } catch {
     throw new Error(
       `Invalid publish issue title: '${context.payload.issue.title}'`
     );
   }
-  const { workspace: workspaceJson, ...titleDetails } = titleMatch.groups;
+  const { workspace: workspaceJson, ...parsedTitleDetails } = titleDetails;
   let workspace = "";
   if (workspaceJson) {
     try {
@@ -48,9 +50,12 @@ async function detailsFromContext({ context }) {
   const dry_run = context.payload.issue.labels.some((l) => l.name === "dry-run")
     ? "1"
     : "";
-  const path = "." + (titleDetails.path || "");
+  const path = "." + parsedTitleDetails.path;
   if (path.split("/").includes("..")) {
     throw new Error(`Invalid publish issue path: '${path}'`);
+  }
+  if (workspace && path !== ".") {
+    throw new Error("A publish workspace must use the repository root path.");
   }
 
   // https://docs.github.com/en/get-started/using-git/dealing-with-special-characters-in-branch-and-tag-names#naming-branches-and-tags
@@ -72,7 +77,7 @@ async function detailsFromContext({ context }) {
   }
 
   return {
-    ...titleDetails,
+    ...parsedTitleDetails,
     dry_run,
     merge_target,
     path,

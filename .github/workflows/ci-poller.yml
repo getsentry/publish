@@ -48,6 +48,11 @@ jobs:
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
           owner: getsentry # create token with access to all getsentry repos
 
+      - name: Check out publish controller
+        uses: actions/checkout@v5
+        with:
+          path: .__publish__
+
       - name: Check CI status for ci-pending issues
         env:
           # Use the sentry-internal-app token for label changes on this
@@ -92,26 +97,14 @@ jobs:
             title=$(echo "$issue" | jq -r '.title')
             body=$(echo "$issue" | jq -r '.body')
 
-            # Parse repo and version from title: "publish: owner/repo[/path]@version"
-            # Only take owner/repo (first two segments) — monorepos like
-            # "getsentry/relay/py@0.9.26" have a path suffix that isn't part
-            # of the GitHub repo name.
-            repo=$(echo "$title" | sed -n 's|^publish: \([^/]*/[^/@]*\).*@.*|\1|p')
-            version=$(echo "$title" | sed -n 's/^publish: .*@\(.*\)/\1/p')
-
-            if [[ -z "$repo" || -z "$version" ]]; then
-              echo "::warning::Could not parse repo/version from issue #${number}: ${title}"
+            if ! publish_input=$(PUBLISH_ISSUE_BODY="$body" PUBLISH_TITLE="$title" \
+              node .__publish__/src/publish/resolve-ci-poller-input.js); then
+              echo "::warning::Could not parse canonical publish input for issue #${number}, skipping."
               continue
             fi
-
-            # Extract the commit SHA from the "View check runs" link in the issue body.
-            # Link format: https://github.com/{owner}/{repo}/commit/{SHA}/checks/
-            issue_sha=$(echo "$body" | grep -oP '(?<=commit/)[0-9a-f]{40}(?=/checks)' || true)
-
-            if [[ -z "$issue_sha" ]]; then
-              echo "::warning::Could not extract commit SHA from issue #${number} body, skipping."
-              continue
-            fi
+            repo=$(echo "$publish_input" | jq -r '.repo')
+            version=$(echo "$publish_input" | jq -r '.version')
+            issue_sha=$(echo "$publish_input" | jq -r '.revision')
 
             # Resolve the release branch name from the original commit's check
             # suites (avoids hard-coding "release/{version}" since repos can
@@ -149,7 +142,8 @@ jobs:
             # for humans and for subsequent poller runs.
             if [[ "$sha" != "$issue_sha" ]]; then
               echo "  Branch ${branch} moved: ${issue_sha:0:8} → ${sha:0:8}. Updating issue."
-              updated_body="${body//${issue_sha}/${sha}}"
+              updated_body=$(PUBLISH_ISSUE_BODY="$body" PUBLISH_REVISION="$sha" PUBLISH_TITLE="$title" \
+                node .__publish__/src/publish/resolve-ci-poller-input.js | jq -r '.issueBody')
               gh issue edit "$number" -R "$GITHUB_REPOSITORY" --body "$updated_body"
             fi
 

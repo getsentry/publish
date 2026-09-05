@@ -10,52 +10,41 @@ Every title starts with `publish: `. This EBNF is canonical:
 
 ```text
 title             = "publish: ", [ "getsentry/" ], repository, [ path ],
-                    [ legacy-workspace ], "@", version ;
+                    "@", version ;
 repository        = token, { token } ;
 path              = "/", path-segment, { "/", path-segment } ;
 path-segment      = token, { token } ;
-legacy-workspace  = " [workspace: ", json-string, "] " ;
 version           = version-character, { version-character } ;
 token             = ? ASCII letter, digit, ".", "_", or "-" ? ;
 version-character = token | "+" ;
 ```
 
-New Craft requests always include the checkout repository identity. Root workspace
-releases use one trailing path segment for the workspace name:
+New Craft requests always include the checkout repository identity. A workspace
+release uses its full concrete path as the title suffix:
 
 ```text
 publish: getsentry/sentry@21.3.1
-publish: getsentry/toolkit/cli@1.2.3
+publish: getsentry/toolkit/packages/cli@1.2.3
 ```
 
-Craft rejects a workspace with a non-root checkout path. Workspace names in new titles
-must match `^[A-Za-z0-9_.-]+$`; Craft preserves their exact spelling.
+Workspace paths in titles use ASCII path segments matching `[A-Za-z0-9_.-]+`,
+except `.`, `..`, `__proto__`, and segments starting with `-`. Craft preserves
+their exact spelling.
 
-The controller resolves a one-segment suffix only after it checks out the exact
+Repository identities use the same safe token rule and cannot be `.`, `..`,
+`__proto__`, or start with `-`. Versions must be valid Craft semantic versions;
+build metadata such as `4.2.6+sentry1` is valid.
+
+The controller resolves the complete suffix only after it checks out the exact
 CI-approved revision from the `View check runs` link. When that checkout has a root
-`.craft.yml`, `craft workspace list` supplies the exact workspace keys. A suffix that
-exactly matches one of those keys is a workspace; every other suffix remains a checkout
-path. The controller never normalizes names. A missing root `.craft.yml` always means
-checkout-path behavior. Discovery errors with a root configuration fail the release.
+`.craft.yml`, `craft workspace list` supplies the exact concrete workspace paths. A
+suffix that exactly matches one of those paths is a workspace; every other suffix
+remains a checkout path. The controller never normalizes names. A missing root
+`.craft.yml` always means checkout-path behavior. Discovery errors with a root
+configuration fail the release.
 
-Existing JSON-qualified workspace titles remain supported for compatibility, but Craft
-does not create them:
-
-```text
-publish: getsentry/toolkit [workspace: "cli/v2"] @1.2.3
-publish: getsentry/toolkit [workspace: "cli [preview] \"next\""] @1.2.3
-```
-
-Legacy workspace titles must also use the repository root path.
-
-`<json-string>` is one valid JSON string, including its double quotes. It must decode
-to a nonempty workspace name and must not contain Unicode control (`Cc`), format
-(`Cf`), line-separator (`Zl`), or paragraph-separator (`Zp`) characters. Legacy
-workspace titles have one space after `]` before `@`; unqualified titles have no space
-before `@`.
-
-`getsentry/` remains optional when parsing existing issues. Paths must not contain a
-`..` segment.
+`getsentry/` remains optional when parsing existing issues. Paths must use only
+safe workspace segments.
 
 ## Body
 
@@ -91,6 +80,7 @@ file; targets marked checked are skipped on retry unless manually unchecked.
 The requester, approval guidance, and optional changelog section are informational. The
 `Quick links` must follow `Requested by` and `Merge target`, and contain exactly one `View
 changes` line followed by exactly one `View check runs` line for the checkout repository.
-The controller and CI poller use that check-runs revision as the release authority. The
-`accepted` label starts publishing;
-`dry-run` requests dry-run mode.
+The controller and CI poller use that check-runs revision as the release authority.
+The `accepted` label starts CI waiting. Publishing starts only when the CI poller
+adds a fresh `ci-ready` label to an open, accepted issue with neither `ci-pending`
+nor `ci-failed`. `dry-run` requests dry-run mode.

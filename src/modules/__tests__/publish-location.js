@@ -1,26 +1,14 @@
 import { expect, test } from "vitest";
 
-const {
-  needsWorkspaceDiscovery,
-  resolvePublishLocation,
-} = require("../publish-location.js");
+const { resolvePublishLocation } = require("../publish-location.js");
 
-test.each([
-  [{ path: "./cli" }, true],
-  [{ path: "./packages/cli" }, false],
-  [{ path: "." }, false],
-  [{ path: "./cli", workspace: "cli" }, false],
-])("workspace discovery is %s for %j", (input, expected) => {
-  expect(needsWorkspaceDiscovery(input)).toBe(expected);
-});
-
-test("classifies an exact one-segment workspace without normalizing it", () => {
+test("classifies an exact full workspace path without normalizing it", () => {
   expect(
     resolvePublishLocation({
-      path: "./CLI",
-      workspaceNames: ["cli", "CLI"],
+      path: "./packages/CLI",
+      workspaceNames: ["packages/cli", "packages/CLI"],
     })
-  ).toStrictEqual({ path: ".", workspace: "CLI" });
+  ).toStrictEqual({ path: ".", workspace: "packages/CLI" });
 });
 
 test("keeps a non-workspace suffix as a checkout path", () => {
@@ -32,7 +20,7 @@ test("keeps a non-workspace suffix as a checkout path", () => {
   ).toStrictEqual({ path: "./packages" });
 });
 
-test("keeps multi-segment paths even when the last segment is a workspace", () => {
+test("keeps a multi-segment suffix that is not an exact workspace path", () => {
   expect(
     resolvePublishLocation({
       path: "./packages/cli",
@@ -50,50 +38,54 @@ test("keeps root releases at the checkout root", () => {
   ).toStrictEqual({ path: "." });
 });
 
-test("preserves the legacy explicit workspace", () => {
-  expect(
-    resolvePublishLocation({
-      path: ".",
-      workspace: "cli/v2",
-      workspaceNames: [],
-    })
-  ).toStrictEqual({ path: ".", workspace: "cli/v2" });
-});
-
-test("rejects a workspace with a non-root path", () => {
+test("rejects invalid discovery output for a root release", () => {
   expect(() =>
     resolvePublishLocation({
-      path: "./packages/cli",
-      workspace: "cli/v2",
-      workspaceNames: [],
+      path: ".",
+      workspaceNames: ["packages/../cli"],
     })
-  ).toThrow("A publish workspace must use the repository root path.");
+  ).toThrow("Craft workspace discovery returned an invalid workspace list.");
 });
 
-test("does not validate discovery for a legacy explicit workspace", () => {
-  expect(
-    resolvePublishLocation({
-      path: ".",
-      workspace: "cli/v2",
-      workspaceNames: ["invalid/workspace"],
-    })
-  ).toStrictEqual({ path: ".", workspace: "cli/v2" });
-});
+test.each(["./.", "./..", "./packages/../other"])(
+  "rejects an unsafe publish path %s",
+  (path) => {
+    expect(() =>
+      resolvePublishLocation({
+        path,
+        workspaceNames: [],
+      })
+    ).toThrow("Invalid publish path.");
+  }
+);
 
 test("rejects an invalid workspace returned by discovery", () => {
   expect(() =>
     resolvePublishLocation({
-      path: "./cli",
+      path: "./packages/cli",
       workspaceNames: ["cli-日本語"],
     })
   ).toThrow("Craft workspace discovery returned an invalid workspace list");
 });
 
-test.each([".", ".."])("rejects traversal workspace name %s", (workspace) => {
-  expect(() =>
-    resolvePublishLocation({
-      path: `./${workspace}`,
-      workspaceNames: [workspace],
-    })
-  ).toThrow("Craft workspace discovery returned an invalid workspace list.");
-});
+test.each([
+  ".",
+  "..",
+  "packages/./cli",
+  "packages/../cli",
+  "packages/__proto__/cli",
+  "packages/-cli",
+  "packages/foo]",
+  "packages/foo!",
+  "packages/foo^",
+])(
+  "rejects unsafe workspace name %s",
+  (workspace) => {
+    expect(() =>
+      resolvePublishLocation({
+        path: "./packages/cli",
+        workspaceNames: [workspace],
+      })
+    ).toThrow("Craft workspace discovery returned an invalid workspace list.");
+  }
+);

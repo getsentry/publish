@@ -1,17 +1,6 @@
-function needsWorkspaceDiscovery({ path, workspace }) {
-  return !workspace && /^\.\/[A-Za-z0-9_.-]+$/.test(path);
-}
-
-function resolvePublishLocation({ path, workspace, workspaceNames }) {
-  if (workspace) {
-    if (path !== ".") {
-      throw new Error("A publish workspace must use the repository root path.");
-    }
-    return { path, workspace };
-  }
-
-  if (!needsWorkspaceDiscovery({ path, workspace })) {
-    return { path };
+function resolvePublishLocation({ path, workspaceNames }) {
+  if (!isPublishPath(path)) {
+    throw new Error("Invalid publish path.");
   }
 
   if (!workspaceNames.every(isWorkspaceName)) {
@@ -20,26 +9,45 @@ function resolvePublishLocation({ path, workspace, workspaceNames }) {
     );
   }
 
-  const segments = path.slice(2).split("/");
-  if (
-    path.startsWith("./") &&
-    segments.length === 1 &&
-    workspaceNames.includes(segments[0])
-  ) {
-    return { path: ".", workspace: segments[0] };
+  if (path === ".") {
+    return { path };
+  }
+
+  const workspace = path.slice(2);
+  if (workspaceNames.includes(workspace)) {
+    return { path: ".", workspace };
   }
 
   return { path };
 }
 
-function isWorkspaceName(name) {
+function isPublishPath(path) {
   return (
-    typeof name === "string" &&
-    name !== "__proto__" &&
-    name !== "." &&
-    name !== ".." &&
-    /^[A-Za-z0-9_.-]+$/.test(name)
+    typeof path === "string" &&
+    (path === "." ||
+      (path.startsWith("./") &&
+        path
+          .slice(2)
+          .split("/")
+          .every(isSafeWorkspaceSegment)))
   );
 }
 
-module.exports = { needsWorkspaceDiscovery, resolvePublishLocation };
+function isWorkspaceName(name) {
+  return (
+    typeof name === "string" &&
+    name.split("/").every(isSafeWorkspaceSegment)
+  );
+}
+
+function isSafeWorkspaceSegment(segment) {
+  return (
+    /^[A-Za-z0-9_.-]+$/.test(segment) &&
+    segment !== "." &&
+    segment !== ".." &&
+    segment !== "__proto__" &&
+    !segment.startsWith("-")
+  );
+}
+
+module.exports = { resolvePublishLocation, isPublishPath };

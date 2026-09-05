@@ -1,4 +1,9 @@
 const { parse: parsePublishIssueTitle } = require("./publish-issue-title");
+const { isPublishPath } = require("./publish-location");
+const {
+  isPublishRepository,
+  isReleaseVersion,
+} = require("./publish-issue-validation");
 
 /**
  * Matches the entire "Targets" section of a github publish issue body.
@@ -31,31 +36,18 @@ async function detailsFromContext({ context }) {
       `Invalid publish issue title: '${context.payload.issue.title}'`
     );
   }
-  const { workspace: workspaceJson, ...parsedTitleDetails } = titleDetails;
-  let workspace = "";
-  if (workspaceJson) {
-    try {
-      workspace = JSON.parse(workspaceJson);
-    } catch {
-      throw new Error(
-        `Invalid publish workspace JSON in title: '${context.payload.issue.title}'`
-      );
-    }
-    if (!workspace || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(workspace)) {
-      throw new Error(
-        "Workspace names must be nonempty and cannot contain Unicode control, format, or separator characters"
-      );
-    }
+  if (!isPublishRepository(titleDetails.repo)) {
+    throw new Error(`Invalid publish issue repository: '${titleDetails.repo}'`);
+  }
+  if (!isReleaseVersion(titleDetails.version)) {
+    throw new Error(`Invalid publish issue version: '${titleDetails.version}'`);
   }
   const dry_run = context.payload.issue.labels.some((l) => l.name === "dry-run")
     ? "1"
     : "";
-  const path = "." + parsedTitleDetails.path;
-  if (path.split("/").includes("..")) {
+  const path = "." + titleDetails.path;
+  if (!isPublishPath(path)) {
     throw new Error(`Invalid publish issue path: '${path}'`);
-  }
-  if (workspace && path !== ".") {
-    throw new Error("A publish workspace must use the repository root path.");
   }
 
   // https://docs.github.com/en/get-started/using-git/dealing-with-special-characters-in-branch-and-tag-names#naming-branches-and-tags
@@ -77,12 +69,11 @@ async function detailsFromContext({ context }) {
   }
 
   return {
-    ...parsedTitleDetails,
+    ...titleDetails,
     dry_run,
     merge_target,
     path,
     targets,
-    ...(workspace ? { workspace } : {}),
   };
 }
 

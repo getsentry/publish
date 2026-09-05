@@ -172,12 +172,7 @@ jobs:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
         run: |
           workspace_names='[]'
-          requires_workspace_discovery="$(node -e '
-            const { needsWorkspaceDiscovery } = require("./.__publish__/src/modules/publish-location");
-            const input = JSON.parse(process.env.PUBLISH_ARGS || "");
-            process.stdout.write(String(needsWorkspaceDiscovery(input)));
-          ')"
-          if [[ "$requires_workspace_discovery" == "true" && -f __repo__/.craft.yml ]]; then
+          if [[ -f __repo__/.craft.yml ]]; then
             workspace_names="$(docker run --rm \
               --volume "$GITHUB_WORKSPACE/__repo__:/github/workspace/__repo__" \
               --workdir /github/workspace/__repo__ \
@@ -224,13 +219,18 @@ jobs:
           owner_sanitised="$(sanitise getsentry)"
           repo_sanitised="$(sanitise "$CRAFT_PUBLISH_REPO")"
           version_sanitised="$(sanitise "$CRAFT_PUBLISH_VERSION")"
+          version_component="$version_sanitised"
+          if [[ "$version_sanitised" != "$CRAFT_PUBLISH_VERSION" ]]; then
+            version_encoded="$(printf %s "$CRAFT_PUBLISH_VERSION" | base64 -w 0 | tr '+/' '-_' | tr -d '=')"
+            version_component="version-${version_encoded}"
+          fi
           workspace_prefix=""
           if [[ -n "$CRAFT_PUBLISH_WORKSPACE" ]]; then
             workspace_encoded="$(printf %s "$CRAFT_PUBLISH_WORKSPACE" | base64 -w 0 | tr '+/' '-_' | tr -d '=')"
             workspace_prefix="workspace-${workspace_encoded}-"
           fi
           state_dir="$GITHUB_WORKSPACE/.craft-state/craft"
-          state_file="$state_dir/publish-state-${owner_sanitised}-${repo_sanitised}-${cwd_hash}-${workspace_prefix}${version_sanitised}.json"
+          state_file="$state_dir/publish-state-${owner_sanitised}-${repo_sanitised}-${cwd_hash}-${workspace_prefix}${version_component}.json"
           mkdir -p "$state_dir"
           printf %s "$payload" > "$state_file"
           echo "state_file=$state_file" >> "$GITHUB_OUTPUT"

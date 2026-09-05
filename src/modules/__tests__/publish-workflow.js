@@ -81,7 +81,7 @@ test("uses the CI-approved revision for checkout, location resolution, and publi
     "ref: ${{ steps.release-revision.outputs.revision }}"
   );
   expect(workflow).toContain("getsentry/craft:latest workspace list");
-  expect(workflow).toContain('if [[ "$requires_workspace_discovery" == "true"');
+  expect(workflow).toContain("if [[ -f __repo__/.craft.yml ]]; then");
   expect(workflow).not.toContain("getsentry/craft:2.31.0");
   expect(workflow).toContain(
     "CRAFT_PUBLISH_PATH: ${{ fromJSON(steps.location.outputs.result).path }}"
@@ -92,6 +92,16 @@ test("uses the CI-approved revision for checkout, location resolution, and publi
   expect(workflow).toContain(
     "craft publish ${{ fromJSON(steps.inputs.outputs.result).version }} --rev ${{ steps.release-revision.outputs.revision }}"
   );
+});
+
+test("publishes only on a fresh CI-ready label event", () => {
+  const workflow = getWorkflow();
+
+  expect(workflow).toContain("github.event.label.name == 'ci-ready'");
+  expect(workflow).toContain("contains(github.event.issue.labels.*.name, 'accepted')");
+  expect(workflow).toContain("contains(github.event.issue.labels.*.name, 'ci-ready')");
+  expect(workflow).toContain("!contains(github.event.issue.labels.*.name, 'ci-pending')");
+  expect(workflow).toContain("!contains(github.event.issue.labels.*.name, 'ci-failed')");
 });
 
 test("uses Craft's legacy root state filename", () => {
@@ -109,8 +119,8 @@ test("uses Craft's legacy root state filename", () => {
 
 test("matches Craft's workspace state filename for a monorepo release", () => {
   const location = resolvePublishLocation({
-    path: "./cli",
-    workspaceNames: ["cli"],
+    path: "./packages/cli",
+    workspaceNames: ["packages/cli"],
   });
   const { stateFile, state } = runSetTargets({
     path: location.path,
@@ -120,7 +130,24 @@ test("matches Craft's workspace state filename for a monorepo release", () => {
   });
 
   expect(stateFile).toMatch(
-    /\.craft-state\/craft\/publish-state-getsentry-toolkit-c232c383e26f-workspace-Y2xp-1\.2\.3\.json$/
+    /\.craft-state\/craft\/publish-state-getsentry-toolkit-c232c383e26f-workspace-cGFja2FnZXMvY2xp-1\.2\.3\.json$/
   );
   expect(JSON.parse(state)).toEqual({ published: { github: true } });
+});
+
+test("does not collide state files for release versions that differ by case", () => {
+  const first = runSetTargets({
+    path: ".",
+    repo: "toolkit",
+    version: "4.2.6+sentry1",
+  });
+  const second = runSetTargets({
+    path: ".",
+    repo: "toolkit",
+    version: "4.2.6+Sentry1",
+  });
+
+  expect(first.stateFile).not.toBe(second.stateFile);
+  expect(first.stateFile).toMatch(/-version-NC4yLjYrc2VudHJ5MQ\.json$/);
+  expect(second.stateFile).toMatch(/-version-NC4yLjYrU2VudHJ5MQ\.json$/);
 });

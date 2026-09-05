@@ -3,6 +3,11 @@ const {
   getReleaseRevision,
   updateReleaseRevision,
 } = require("./release-revision");
+const {
+  isPublishRepository,
+  isReleaseVersion,
+} = require("./publish-issue-validation");
+const { isPublishPath } = require("./publish-location");
 
 function getCiPollerInput({ title, issueBody, revision }) {
   let parsedTitle;
@@ -12,6 +17,16 @@ function getCiPollerInput({ title, issueBody, revision }) {
     throw new Error(`Invalid publish issue title: '${title}'`);
   }
   const { repo, version } = parsedTitle;
+  if (!isPublishRepository(repo)) {
+    throw new Error(`Invalid publish issue repository: '${repo}'`);
+  }
+  if (!isReleaseVersion(version)) {
+    throw new Error(`Invalid publish issue version: '${version}'`);
+  }
+  const path = `.${parsedTitle.path}`;
+  if (!isPublishPath(path)) {
+    throw new Error(`Invalid publish issue path: '${path}'`);
+  }
   const currentRevision = getReleaseRevision({ issueBody, repo });
 
   return {

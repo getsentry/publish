@@ -48,6 +48,10 @@ function discoverLocation({
   exists,
   execFile,
 }) {
+  if (input.path === ".") {
+    return { path: "." };
+  }
+
   return resolvePublishLocation({
     path: input.path,
     workspaceNames: getWorkspaceNames({ repositoryDirectory, exists, execFile }),

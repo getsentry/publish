@@ -39,6 +39,24 @@ test("accepts CRLF request bodies", () => {
   ).toBe(REVISION);
 });
 
+test("accepts a check-runs URL without a trailing slash", () => {
+  expect(
+    getReleaseRevision({
+      repo: "toolkit",
+      issueBody: requestBody(canonicalQuickLinks().replace("/checks/)", "/checks)")),
+    })
+  ).toBe(REVISION);
+});
+
+test("rejects a check-runs URL without the checks path", () => {
+  expect(() =>
+    getReleaseRevision({
+      repo: "toolkit",
+      issueBody: requestBody(canonicalQuickLinks().replace("/checks/)", ")")),
+    })
+  ).toThrow("Expected a View check runs link for getsentry/toolkit");
+});
+
 test("rejects a check-runs link for another repository", () => {
   expect(() =>
     getReleaseRevision({
@@ -70,6 +88,19 @@ Quick links:
   ).toThrow("Expected exactly one View check runs link in Quick links");
 });
 
+test("rejects an embedded check-runs link outside the request header", () => {
+  expect(() =>
+    getReleaseRevision({
+      repo: "toolkit",
+      issueBody: `${requestBody(canonicalQuickLinks())}
+
+Ignored - [View check runs](https://github.com/getsentry/toolkit/commit/${"a".repeat(
+        40
+      )}/checks/)`,
+    })
+  ).toThrow("Expected exactly one View check runs link in Quick links");
+});
+
 test("rejects a complete Quick links block outside the request header", () => {
   expect(() =>
     getReleaseRevision({
@@ -95,9 +126,25 @@ ${requestBody(canonicalQuickLinks())}`,
 
 test("updates only the canonical request-header revision", () => {
   const replacement = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-  const issueBody = requestBody(canonicalQuickLinks());
+  const issueBody = `${requestBody(canonicalQuickLinks()).replace(
+    /\n/g,
+    "\r\n"
+  )}\r\n\r\nTrailing content\r\n`;
 
   expect(
     updateReleaseRevision({ issueBody, repo: "toolkit", revision: replacement })
-  ).toContain(`/commit/${replacement}/checks/`);
+  ).toBe(issueBody.replace(REVISION, replacement));
 });
+
+test.each(["A".repeat(40), "a".repeat(39), "a".repeat(41)])(
+  "rejects an invalid replacement revision: %s",
+  (revision) => {
+    expect(() =>
+      updateReleaseRevision({
+        issueBody: requestBody(canonicalQuickLinks()),
+        repo: "toolkit",
+        revision,
+      })
+    ).toThrow("Release revision must be a lowercase 40-character SHA.");
+  }
+);

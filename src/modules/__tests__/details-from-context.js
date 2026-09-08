@@ -9,8 +9,7 @@ const inputsArgs = {
       issue: {
         number: "223",
         title: "publish: getsentry/sentry@21.3.1",
-        body: `
-Requested by: @BYK
+        body: `Requested by: @BYK
 
 Merge target: custom-branch
 
@@ -54,7 +53,13 @@ test("can parse version containing +", async () => {
         issue: {
           number: "123",
           title: "publish: getsentry/sentry-forked-django-stubs@4.2.6+sentry1",
-          body: "Requested by: @example",
+          body: `Requested by: @example
+
+Merge target: (default)
+
+Quick links:
+- [View changes](https://github.com/getsentry/sentry-forked-django-stubs/compare/4.2.5...refs/heads/releases/4.2.6)
+- [View check runs](https://github.com/getsentry/sentry-forked-django-stubs/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)`,
           labels: [],
         },
       },
@@ -70,8 +75,7 @@ const defaultTargetInputsArgs = {
       issue: {
         number: "223",
         title: "publish: getsentry/sentry@21.3.1",
-        body: `
-Requested by: @BYK
+        body: `Requested by: @BYK
 Merge target: (default)
 Quick links:
 - [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)
@@ -101,6 +105,21 @@ test("Do not extract merge_target value if its a default value", async () => {
   });
 });
 
+test("uses the merge target from the canonical request header", async () => {
+  const result = await detailsFromContext({
+    context: {
+      payload: {
+        issue: {
+          ...inputsArgs.context.payload.issue,
+          body: `${inputsArgs.context.payload.issue.body}\nMerge target: decoy`,
+        },
+      },
+    },
+  });
+
+  expect(result.merge_target).toBe("custom-branch");
+});
+
 test("keeps a concrete workspace path in the title suffix", async () => {
   const result = await detailsFromContext({
     context: {
@@ -109,7 +128,13 @@ test("keeps a concrete workspace path in the title suffix", async () => {
         issue: {
           number: "123",
           title: "publish: getsentry/toolkit/packages/cli@1.2.3",
-          body: "Requested by: @example",
+          body: `Requested by: @example
+
+Merge target: (default)
+
+Quick links:
+- [View changes](https://github.com/getsentry/toolkit/compare/1.2.2...refs/heads/releases/1.2.3)
+- [View check runs](https://github.com/getsentry/toolkit/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)`,
           labels: [],
         },
       },

@@ -2,8 +2,8 @@ const core = require("@actions/core");
 const { resolvePublishLocation } = require("../modules/publish-location");
 
 function resolveLocation() {
-  const input = JSON.parse(process.env.PUBLISH_ARGS || "");
-  const workspaceNames = JSON.parse(process.env.CRAFT_WORKSPACE_NAMES || "");
+  const input = JSON.parse(process.env.PUBLISH_ARGS || "{}");
+  const workspaceNames = JSON.parse(process.env.CRAFT_WORKSPACE_NAMES || "[]");
 
   if (!Array.isArray(workspaceNames)) {
     throw new Error(
@@ -13,10 +13,12 @@ function resolveLocation() {
 
   core.setOutput(
     "result",
-    resolvePublishLocation({
-      path: input.path,
-      workspaceNames,
-    })
+    JSON.stringify(
+      resolvePublishLocation({
+        path: input.path,
+        workspaceNames,
+      })
+    )
   );
 }
 

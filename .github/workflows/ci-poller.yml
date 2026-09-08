@@ -49,7 +49,7 @@ jobs:
           owner: getsentry # create token with access to all getsentry repos
 
       - name: Check out publish controller
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           path: .__publish__
 
@@ -93,14 +93,19 @@ jobs:
 
           # Check each issue's CI status
           echo "$issues" | jq -c '.[]' | while read -r issue; do
+            (
             number=$(echo "$issue" | jq -r '.number')
             title=$(echo "$issue" | jq -r '.title')
-            body=$(echo "$issue" | jq -r '.body')
+            body_file=$(mktemp)
+            resolver_output_file=""
+            updated_body_file=""
+            trap 'for file in "${body_file:-}" "${resolver_output_file:-}" "${updated_body_file:-}"; do [[ -z "$file" ]] || rm -f "$file"; done' EXIT
+            printf '%s' "$issue" | jq -jr '.body' > "$body_file"
 
-            if ! publish_input=$(PUBLISH_ISSUE_BODY="$body" PUBLISH_TITLE="$title" \
+            if ! publish_input=$(PUBLISH_ISSUE_BODY_FILE="$body_file" PUBLISH_TITLE="$title" \
               node .__publish__/src/publish/resolve-ci-poller-input.js); then
               echo "::warning::Could not parse canonical publish input for issue #${number}, skipping."
-              continue
+              exit 0
             fi
             repo=$(echo "$publish_input" | jq -r '.repo')
             version=$(echo "$publish_input" | jq -r '.version')
@@ -142,9 +147,19 @@ jobs:
             # for humans and for subsequent poller runs.
             if [[ "$sha" != "$issue_sha" ]]; then
               echo "  Branch ${branch} moved: ${issue_sha:0:8} → ${sha:0:8}. Updating issue."
-              updated_body=$(PUBLISH_ISSUE_BODY="$body" PUBLISH_REVISION="$sha" PUBLISH_TITLE="$title" \
-                node .__publish__/src/publish/resolve-ci-poller-input.js | jq -r '.issueBody')
-              gh issue edit "$number" -R "$GITHUB_REPOSITORY" --body "$updated_body"
+              resolver_output_file=$(mktemp)
+              updated_body_file=$(mktemp)
+              if ! PUBLISH_ISSUE_BODY_FILE="$body_file" PUBLISH_REVISION="$sha" PUBLISH_TITLE="$title" \
+                node .__publish__/src/publish/resolve-ci-poller-input.js > "$resolver_output_file"; then
+                echo "::warning::Could not update canonical publish input for issue #${number}, skipping."
+                exit 0
+              fi
+              if ! jq -ejr 'if (.issueBody | type) == "string" and (.issueBody | length) > 0 then .issueBody else error("Expected nonempty issueBody string") end' \
+                "$resolver_output_file" > "$updated_body_file"; then
+                echo "::warning::Could not decode updated publish issue body for issue #${number}, skipping."
+                exit 0
+              fi
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" --body-file "$updated_body_file"
             fi
 
             echo "Checking CI for ${repo}@${version} commit ${sha:0:8} (issue #${number})..."
@@ -155,7 +170,7 @@ jobs:
             # installed on this repo) — don't try to derive state from partial data.
             if ! status_json=$(gh_api_release "repos/${repo}/commits/${sha}/status"); then
               echo "  Could not fetch commit status for ${repo}@${sha:0:8}, skipping."
-              continue
+              exit 0
             fi
             commit_status=$(echo "$status_json" | jq -r '.state')
             total_statuses=$(echo "$status_json" | jq -r '.total_count')
@@ -165,7 +180,7 @@ jobs:
             # '.check_runs[]' and count with a second jq pass.
             if ! all_checks=$(gh_api_release --paginate "repos/${repo}/commits/${sha}/check-runs" --jq '.check_runs[]'); then
               echo "  Could not fetch check runs for ${repo}@${sha:0:8}, skipping."
-              continue
+              exit 0
             fi
 
             total_checks=$(echo "$all_checks" | jq -s 'length')
@@ -181,7 +196,7 @@ jobs:
             # otherwise CI hasn't started yet and all counts would be 0.
             if [[ "$total_checks" == "0" && "$total_statuses" == "0" ]]; then
               echo "  No check runs or commit statuses found — CI may not have started yet."
-              continue
+              exit 0
             fi
 
             # CI is ready when:
@@ -237,6 +252,7 @@ jobs:
               comment_body="CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed status checks:"$'\n'"${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
             fi
+            )
           done
 
       # Cleanup: check if we should disable the poller. Runs even if the

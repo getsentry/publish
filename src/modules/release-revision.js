@@ -1,29 +1,51 @@
-const CHECK_RUNS_LINK =
-  /^Requested by: @[^\r\n]+\r?\n(?:[ \t]*\r?\n)?[ \t]*Merge target: [^\r\n]+\r?\n(?:[ \t]*\r?\n)?[ \t]*Quick links:\r?\n(?:[ \t]*\r?\n)?[ \t]*- \[View changes\]\([^\r\n]+\)\r?\n[ \t]*- \[View check runs\]\(https:\/\/github\.com\/getsentry\/(?<repo>[A-Za-z0-9_.-]+)\/commit\/(?<revision>[0-9a-f]{40})\/checks\/?\)(?=\r?\n|$)/;
-const CHECK_RUNS_LINK_COUNT = /^[ \t]*- \[View check runs\]\(/gm;
+const { parse } = require("./publish-issue-title");
 
-function getReleaseRevision({ issueBody, repo }) {
-  if ((issueBody.match(CHECK_RUNS_LINK_COUNT) || []).length !== 1) {
+function isRevision(revision) {
+  return /^[0-9a-f]{40}$/.test(revision);
+}
+
+function getReleaseRevisionDetails({ issueBody, repo }) {
+  if (
+    parse(issueBody, { startRule: "CheckRunsLinkCount" }) !== 1
+  ) {
     throw new Error(
       `Expected exactly one View check runs link in Quick links for getsentry/${repo}.`
     );
   }
 
-  const match = issueBody.match(CHECK_RUNS_LINK);
-  if (!match?.groups || match.groups.repo !== repo) {
+  let details;
+  try {
+    details = parse(issueBody, { startRule: "ReleaseRevision" });
+  } catch {
     throw new Error(
       `Expected a View check runs link for getsentry/${repo} in the publish issue body.`
     );
   }
 
-  return match.groups.revision;
+  if (details.repo !== repo) {
+    throw new Error(
+      `Expected a View check runs link for getsentry/${repo} in the publish issue body.`
+    );
+  }
+
+  return details;
+}
+
+function getReleaseRevision({ issueBody, repo }) {
+  return getReleaseRevisionDetails({ issueBody, repo }).revision.value;
 }
 
 function updateReleaseRevision({ issueBody, repo, revision }) {
-  const currentRevision = getReleaseRevision({ issueBody, repo });
-  return issueBody.replace(CHECK_RUNS_LINK, (link) =>
-    link.replace(currentRevision, revision)
-  );
+  if (!isRevision(revision)) {
+    throw new Error("Release revision must be a lowercase 40-character SHA.");
+  }
+
+  const { revision: currentRevision } = getReleaseRevisionDetails({ issueBody, repo });
+  return `${issueBody.slice(0, currentRevision.start)}${revision}${issueBody.slice(currentRevision.end)}`;
 }
 
-module.exports = { getReleaseRevision, updateReleaseRevision };
+module.exports = {
+  getReleaseRevision,
+  getReleaseRevisionDetails,
+  updateReleaseRevision,
+};

@@ -117,7 +117,7 @@ jobs:
       SENTRY_DSN: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838"
     steps:
       - name: Get repo contents
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: .__publish__
 
@@ -156,7 +156,7 @@ jobs:
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
           owner: getsentry # create token that have access to all repos
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         name: Check out target repo
         if: ${{ steps.inputs.outputs.result }}
         with:
@@ -170,16 +170,8 @@ jobs:
         id: location
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-        run: |
-          workspace_names='[]'
-          if [[ -f __repo__/.craft.yml ]]; then
-            workspace_names="$(docker run --rm \
-              --volume "$GITHUB_WORKSPACE/__repo__:/github/workspace/__repo__" \
-              --workdir /github/workspace/__repo__ \
-              getsentry/craft:latest workspace list)"
-          fi
-          CRAFT_WORKSPACE_NAMES="$workspace_names" \
-            node .__publish__/src/publish/resolve-location.js
+          PUBLISH_REPOSITORY_DIRECTORY: __repo__
+        run: node .__publish__/src/publish/discover-location.js
 
       - name: Set targets
         id: craft-state

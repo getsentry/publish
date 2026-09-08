@@ -1,4 +1,5 @@
 const { parse: parsePublishIssueTitle } = require("./publish-issue-title");
+const { getReleaseRevisionDetails } = require("./release-revision");
 const { isPublishPath } = require("./publish-location");
 const {
   isPublishRepository,
@@ -50,13 +51,10 @@ async function detailsFromContext({ context }) {
     throw new Error(`Invalid publish issue path: '${path}'`);
   }
 
-  // https://docs.github.com/en/get-started/using-git/dealing-with-special-characters-in-branch-and-tag-names#naming-branches-and-tags
-  const mergeTargetParser = /^Merge target: (?<merge_target>[\w.\-/]+)$/m;
-  const mergeTargetMatch = context.payload.issue.body.match(mergeTargetParser);
-  let merge_target = "";
-  if (mergeTargetMatch && mergeTargetMatch.groups) {
-    merge_target = mergeTargetMatch.groups.merge_target || "";
-  }
+  const { mergeTarget } = getReleaseRevisionDetails({
+    issueBody: context.payload.issue.body || "",
+    repo: titleDetails.repo,
+  });
 
   const targetsMatch = context.payload.issue.body.match(
     TARGETS_SECTION_PARSER_REGEX
@@ -71,7 +69,7 @@ async function detailsFromContext({ context }) {
   return {
     ...titleDetails,
     dry_run,
-    merge_target,
+    merge_target: mergeTarget === "(default)" ? "" : mergeTarget,
     path,
     targets,
   };

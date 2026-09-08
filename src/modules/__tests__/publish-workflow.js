@@ -80,8 +80,11 @@ test("uses the CI-approved revision for checkout, location resolution, and publi
   expect(workflow).toContain(
     "ref: ${{ steps.release-revision.outputs.revision }}"
   );
-  expect(workflow).toContain("getsentry/craft:latest workspace list");
-  expect(workflow).toContain("if [[ -f __repo__/.craft.yml ]]; then");
+  expect(workflow.match(/actions\/checkout@v7/g)).toHaveLength(2);
+  expect(workflow).toContain(
+    "node .__publish__/src/publish/discover-location.js"
+  );
+  expect(workflow).toContain("PUBLISH_REPOSITORY_DIRECTORY: __repo__");
   expect(workflow).not.toContain("getsentry/craft:2.31.0");
   expect(workflow).toContain(
     "CRAFT_PUBLISH_PATH: ${{ fromJSON(steps.location.outputs.result).path }}"

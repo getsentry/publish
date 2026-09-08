@@ -6,18 +6,39 @@ title by hand unless it remains valid under this format.
 
 ## Title
 
-Every title starts with `publish: `. This EBNF is canonical:
+Every title starts with `publish: `. The following canonical Peggy grammar is
+generated from `src/modules/publish-issue-title.peggy`:
 
-```text
-title             = "publish: ", [ "getsentry/" ], repository, [ path ],
-                    "@", version ;
-repository        = token, { token } ;
-path              = "/", path-segment, { "/", path-segment } ;
-path-segment      = token, { token } ;
-version           = version-character, { version-character } ;
-token             = ? ASCII letter, digit, ".", "_", or "-" ? ;
-version-character = token | "+" ;
+<!-- BEGIN GENERATED TITLE GRAMMAR -->
+```peggy
+// Canonical grammar for publish issue titles. A path suffix is syntactic only:
+// the controller resolves the complete suffix as a workspace after checking
+// out the CI-approved revision.
+PublishIssueTitle
+  = "publish: " "getsentry/"? repo:Repository path:Path? "@" version:Version !. {
+      return {
+        repo,
+        path: path || "",
+        version,
+      };
+    }
+
+Repository
+  = characters:RepositoryCharacter+ { return join(characters); }
+
+RepositoryCharacter
+  = [A-Za-z0-9_.-]
+
+Path
+  = segments:("/" segment:PathSegment { return `/${segment}`; })+ { return join(segments); }
+
+PathSegment
+  = characters:RepositoryCharacter+ { return join(characters); }
+
+Version
+  = characters:[A-Za-z0-9_.+-]+ { return join(characters); }
 ```
+<!-- END GENERATED TITLE GRAMMAR -->
 
 New Craft requests always include the checkout repository identity. A workspace
 release uses its full concrete path as the title suffix:
@@ -69,8 +90,8 @@ Assign the **accepted** label to this issue to approve the release.
 Checked targets will be skipped (either already published or user-requested skip). Uncheck to retry a target.
 ```
 
-`Merge target` is optional. `(default)` means the target repository's default branch.
-When present, the branch may contain letters, digits, `_`, `.`, `/`, and `-`.
+`Merge target` is required. `(default)` means the target repository's default branch.
+The branch may contain letters, digits, `_`, `.`, `/`, and `-`.
 
 The workflow reads checked entries (`- [x] <target-id>`) in the `### Targets` section.
 It preserves checked entries when Craft refreshes an existing request. During a failed

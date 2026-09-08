@@ -16,6 +16,38 @@ test("retains checkout-path behavior when the root config is absent", () => {
   ).toEqual({ path: "./packages/cli" });
 });
 
+test("does not discover workspaces for the checkout root", () => {
+  const execFile = vi.fn(() => {
+    throw new Error("workspace list is unavailable");
+  });
+
+  expect(
+    discoverLocation({
+      input: { path: "." },
+      repositoryDirectory: "__repo__",
+      exists: () => true,
+      execFile,
+    })
+  ).toEqual({ path: "." });
+  expect(execFile).not.toHaveBeenCalled();
+});
+
+test("fails closed when non-root workspace discovery is unavailable", () => {
+  const execFile = vi.fn(() => {
+    throw new Error("workspace list is unavailable");
+  });
+
+  expect(() =>
+    discoverLocation({
+      input: { path: "./packages/cli" },
+      repositoryDirectory: "__repo__",
+      exists: () => true,
+      execFile,
+    })
+  ).toThrow("workspace list is unavailable");
+  expect(execFile).toHaveBeenCalledOnce();
+});
+
 test("discovers exact workspace paths using the released Craft image", () => {
   const execFile = vi.fn(() => '["packages/CLI"]');
 

@@ -48,6 +48,11 @@ jobs:
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
           owner: getsentry # create token with access to all getsentry repos
 
+      - name: Check out publish controller
+        uses: actions/checkout@v7
+        with:
+          path: .__publish__
+
       - name: Check CI status for ci-pending issues
         env:
           # Use the sentry-internal-app token for label changes on this
@@ -88,30 +93,23 @@ jobs:
 
           # Check each issue's CI status
           echo "$issues" | jq -c '.[]' | while read -r issue; do
+            (
             number=$(echo "$issue" | jq -r '.number')
             title=$(echo "$issue" | jq -r '.title')
-            body=$(echo "$issue" | jq -r '.body')
+            body_file=$(mktemp)
+            resolver_output_file=""
+            updated_body_file=""
+            trap 'for file in "${body_file:-}" "${resolver_output_file:-}" "${updated_body_file:-}"; do [[ -z "$file" ]] || rm -f "$file"; done' EXIT
+            printf '%s' "$issue" | jq -jr '.body' > "$body_file"
 
-            # Parse repo and version from title: "publish: owner/repo[/path]@version"
-            # Only take owner/repo (first two segments) — monorepos like
-            # "getsentry/relay/py@0.9.26" have a path suffix that isn't part
-            # of the GitHub repo name.
-            repo=$(echo "$title" | sed -n 's|^publish: \([^/]*/[^/@]*\).*@.*|\1|p')
-            version=$(echo "$title" | sed -n 's/^publish: .*@\(.*\)/\1/p')
-
-            if [[ -z "$repo" || -z "$version" ]]; then
-              echo "::warning::Could not parse repo/version from issue #${number}: ${title}"
-              continue
+            if ! publish_input=$(PUBLISH_ISSUE_BODY_FILE="$body_file" PUBLISH_TITLE="$title" \
+              node .__publish__/src/publish/resolve-ci-poller-input.js); then
+              echo "::warning::Could not parse canonical publish input for issue #${number}, skipping."
+              exit 0
             fi
-
-            # Extract the commit SHA from the "View check runs" link in the issue body.
-            # Link format: https://github.com/{owner}/{repo}/commit/{SHA}/checks/
-            issue_sha=$(echo "$body" | grep -oP '(?<=commit/)[0-9a-f]{40}(?=/checks)' || true)
-
-            if [[ -z "$issue_sha" ]]; then
-              echo "::warning::Could not extract commit SHA from issue #${number} body, skipping."
-              continue
-            fi
+            repo=$(echo "$publish_input" | jq -r '.repo')
+            version=$(echo "$publish_input" | jq -r '.version')
+            issue_sha=$(echo "$publish_input" | jq -r '.revision')
 
             # Resolve the release branch name from the original commit's check
             # suites (avoids hard-coding "release/{version}" since repos can
@@ -149,8 +147,19 @@ jobs:
             # for humans and for subsequent poller runs.
             if [[ "$sha" != "$issue_sha" ]]; then
               echo "  Branch ${branch} moved: ${issue_sha:0:8} → ${sha:0:8}. Updating issue."
-              updated_body="${body//${issue_sha}/${sha}}"
-              gh issue edit "$number" -R "$GITHUB_REPOSITORY" --body "$updated_body"
+              resolver_output_file=$(mktemp)
+              updated_body_file=$(mktemp)
+              if ! PUBLISH_ISSUE_BODY_FILE="$body_file" PUBLISH_REVISION="$sha" PUBLISH_TITLE="$title" \
+                node .__publish__/src/publish/resolve-ci-poller-input.js > "$resolver_output_file"; then
+                echo "::warning::Could not update canonical publish input for issue #${number}, skipping."
+                exit 0
+              fi
+              if ! jq -ejr 'if (.issueBody | type) == "string" and (.issueBody | length) > 0 then .issueBody else error("Expected nonempty issueBody string") end' \
+                "$resolver_output_file" > "$updated_body_file"; then
+                echo "::warning::Could not decode updated publish issue body for issue #${number}, skipping."
+                exit 0
+              fi
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" --body-file "$updated_body_file"
             fi
 
             echo "Checking CI for ${repo}@${version} commit ${sha:0:8} (issue #${number})..."
@@ -161,7 +170,7 @@ jobs:
             # installed on this repo) — don't try to derive state from partial data.
             if ! status_json=$(gh_api_release "repos/${repo}/commits/${sha}/status"); then
               echo "  Could not fetch commit status for ${repo}@${sha:0:8}, skipping."
-              continue
+              exit 0
             fi
             commit_status=$(echo "$status_json" | jq -r '.state')
             total_statuses=$(echo "$status_json" | jq -r '.total_count')
@@ -171,7 +180,7 @@ jobs:
             # '.check_runs[]' and count with a second jq pass.
             if ! all_checks=$(gh_api_release --paginate "repos/${repo}/commits/${sha}/check-runs" --jq '.check_runs[]'); then
               echo "  Could not fetch check runs for ${repo}@${sha:0:8}, skipping."
-              continue
+              exit 0
             fi
 
             total_checks=$(echo "$all_checks" | jq -s 'length')
@@ -187,7 +196,7 @@ jobs:
             # otherwise CI hasn't started yet and all counts would be 0.
             if [[ "$total_checks" == "0" && "$total_statuses" == "0" ]]; then
               echo "  No check runs or commit statuses found — CI may not have started yet."
-              continue
+              exit 0
             fi
 
             # CI is ready when:
@@ -243,6 +252,7 @@ jobs:
               comment_body="CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed status checks:"$'\n'"${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
             fi
+            )
           done
 
       # Cleanup: check if we should disable the poller. Runs even if the

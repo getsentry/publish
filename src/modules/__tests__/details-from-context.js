@@ -9,8 +9,7 @@ const inputsArgs = {
       issue: {
         number: "223",
         title: "publish: getsentry/sentry@21.3.1",
-        body: `
-Requested by: @BYK
+        body: `Requested by: @BYK
 
 Merge target: custom-branch
 
@@ -36,7 +35,7 @@ Assign the **accepted** label to this issue to approve the release.
 
 test("parse inputs", async () => {
   const result = await detailsFromContext(inputsArgs);
-  expect(result).toEqual({
+  expect(result).toStrictEqual({
     dry_run: "",
     merge_target: "custom-branch",
     path: ".",
@@ -54,7 +53,13 @@ test("can parse version containing +", async () => {
         issue: {
           number: "123",
           title: "publish: getsentry/sentry-forked-django-stubs@4.2.6+sentry1",
-          body: "Requested by: @example",
+          body: `Requested by: @example
+
+Merge target: (default)
+
+Quick links:
+- [View changes](https://github.com/getsentry/sentry-forked-django-stubs/compare/4.2.5...refs/heads/releases/4.2.6)
+- [View check runs](https://github.com/getsentry/sentry-forked-django-stubs/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)`,
           labels: [],
         },
       },
@@ -70,8 +75,7 @@ const defaultTargetInputsArgs = {
       issue: {
         number: "223",
         title: "publish: getsentry/sentry@21.3.1",
-        body: `
-Requested by: @BYK
+        body: `Requested by: @BYK
 Merge target: (default)
 Quick links:
 - [View changes](https://github.com/getsentry/sentry/compare/21.3.0...refs/heads/releases/21.3.1)
@@ -91,7 +95,7 @@ Assign the **accepted** label to this issue to approve the release.
 
 test("Do not extract merge_target value if its a default value", async () => {
   const result = await detailsFromContext(defaultTargetInputsArgs);
-  expect(result).toEqual({
+  expect(result).toStrictEqual({
     dry_run: "",
     merge_target: "",
     path: ".",
@@ -99,6 +103,154 @@ test("Do not extract merge_target value if its a default value", async () => {
     targets: ["github", "docker[latest]"],
     version: "21.3.1",
   });
+});
+
+test("uses the merge target from the canonical request header", async () => {
+  const result = await detailsFromContext({
+    context: {
+      payload: {
+        issue: {
+          ...inputsArgs.context.payload.issue,
+          body: `${inputsArgs.context.payload.issue.body}\nMerge target: decoy`,
+        },
+      },
+    },
+  });
+
+  expect(result.merge_target).toBe("custom-branch");
+});
+
+test("keeps a concrete workspace path in the title suffix", async () => {
+  const result = await detailsFromContext({
+    context: {
+      repo: { owner: "getsentry", repo: "publish" },
+      payload: {
+        issue: {
+          number: "123",
+          title: "publish: getsentry/toolkit/packages/cli@1.2.3",
+          body: `Requested by: @example
+
+Merge target: (default)
+
+Quick links:
+- [View changes](https://github.com/getsentry/toolkit/compare/1.2.2...refs/heads/releases/1.2.3)
+- [View check runs](https://github.com/getsentry/toolkit/commit/7e5ca7ed5581552de066e2a8bc295b8306be38ac/checks/)`,
+          labels: [],
+        },
+      },
+    },
+  });
+
+  expect(result).toMatchObject({
+    repo: "toolkit",
+    version: "1.2.3",
+    path: "./packages/cli",
+  });
+});
+
+test("rejects a title with an unexpected space before its version", async () => {
+  const fn = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title: "publish: getsentry/toolkit @1.2.3",
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+
+  await expect(fn).rejects.toThrow("Invalid publish issue title");
+});
+
+test("rejects a path that escapes the target checkout", async () => {
+  const fn = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title: "publish: getsentry/toolkit/../other@1.2.3",
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+
+  await expect(fn).rejects.toThrow("Invalid publish issue path");
+});
+
+test("rejects a title path with a current-directory segment before checkout", async () => {
+  const fn = () =>
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title: "publish: getsentry/toolkit/./other@1.2.3",
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    });
+
+  await expect(fn).rejects.toThrow("Invalid publish issue path");
+});
+
+test.each(["-toolkit", ".", "..", "__proto__"])(
+  "rejects an unsafe checkout repository identity: %s",
+  async (repo) => {
+    await expect(
+      detailsFromContext({
+        context: {
+          payload: {
+            issue: {
+              title: `publish: getsentry/${repo}@1.2.3`,
+              body: "",
+              labels: [],
+            },
+          },
+        },
+      })
+    ).rejects.toThrow("Invalid publish issue repository");
+  }
+);
+
+test.each(["--config", "1.2"])(
+  "rejects an invalid release version: %s",
+  async (version) => {
+    await expect(
+      detailsFromContext({
+        context: {
+          payload: {
+            issue: {
+              title: `publish: getsentry/toolkit@${version}`,
+              body: "",
+              labels: [],
+            },
+          },
+        },
+      })
+    ).rejects.toThrow("Invalid publish issue version");
+  }
+);
+
+test("rejects a version with path syntax", async () => {
+  await expect(
+    detailsFromContext({
+      context: {
+        payload: {
+          issue: {
+            title: "publish: getsentry/toolkit@1.2.3/other",
+            body: "",
+            labels: [],
+          },
+        },
+      },
+    })
+  ).rejects.toThrow("Invalid publish issue title");
 });
 
 test("throw error when context is missing the issue payload", async () => {

@@ -42,6 +42,8 @@ const updateTargetsArgs = {
 
 beforeAll(() => {
   process.env.GITHUB_WORKSPACE = ".";
+  process.env.CRAFT_STATE_FILE_PATH =
+    ".craft-state/craft/publish-state-getsentry-sentry-c232c383e26f-21.3.1.json";
   mockExistsSync = vi.spyOn(fs, "existsSync");
   vi.spyOn(fs.promises, "readFile").mockResolvedValue(
     JSON.stringify({ published: { lol: true, hey: false, github: true } })
@@ -75,9 +77,9 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
     mockExistsSync.mockReturnValue(stateFileExists);
     await updateIssue(updateTargetsArgs);
     expect(mockExistsSync).toHaveBeenCalledTimes(1);
-    // This is process.env.GITHUB_WORKSPACE + / filename
+    // This path comes from the workflow's secure state-file step output.
     expect(mockExistsSync).toHaveBeenCalledWith(
-      "./__repo__/.craft-publish-21.3.1.json"
+      ".craft-state/craft/publish-state-getsentry-sentry-c232c383e26f-21.3.1.json"
     );
   });
 
@@ -127,6 +129,15 @@ describe.each([false, true])("state file exists: %s", (stateFileExists) => {
       name: "accepted",
     });
   });
+});
+
+test("does not read a state file when target setup was skipped", async () => {
+  delete process.env.CRAFT_STATE_FILE_PATH;
+  mockExistsSync.mockClear();
+  await updateIssue(updateTargetsArgs);
+
+  expect(mockExistsSync).not.toHaveBeenCalled();
+  expect(updateTargetsArgs.octokit.rest.issues.update).not.toHaveBeenCalled();
 });
 
 describe("transformIssueBody", () => {

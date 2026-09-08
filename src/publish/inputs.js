@@ -6,7 +6,7 @@ async function inputs() {
     const result = await detailsFromContext({
       context: github.context,
     });
-    core.setOutput('result', result);
+    core.setOutput('result', JSON.stringify(result));
 }
 
 

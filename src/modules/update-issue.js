@@ -4,10 +4,13 @@ const {
   TARGETS_PARSER_REGEX,
 } = require("./details-from-context");
 
-async function updateTargets({octokit, version, publishRepo, issue_number}) {
-  const CRAFT_STATE_FILE_PATH = `${process.env.GITHUB_WORKSPACE}/__repo__/.craft-publish-${version}.json`;
-
-  if (!fs.existsSync(CRAFT_STATE_FILE_PATH)) {
+async function updateTargets({
+  octokit,
+  stateFilePath,
+  publishRepo,
+  issue_number,
+}) {
+  if (!stateFilePath || !fs.existsSync(stateFilePath)) {
     return;
   }
 
@@ -17,7 +20,7 @@ async function updateTargets({octokit, version, publishRepo, issue_number}) {
   });
 
   const craftStateRequest = fs.promises
-    .readFile(CRAFT_STATE_FILE_PATH, { encoding: "utf-8" })
+    .readFile(stateFilePath, { encoding: "utf-8" })
     .then((data) => JSON.parse(data));
 
   const [{ data: issue }, craftState] = await Promise.all([
@@ -36,37 +39,40 @@ async function updateTargets({octokit, version, publishRepo, issue_number}) {
 
 function transformIssueBody(craftState, issueBody) {
   const declaredTargets = new Set();
-  return issueBody.replace(
-    TARGETS_SECTION_PARSER_REGEX,
-    (targetsSection) => {
-      let targetsText = targetsSection.trimEnd();
-      targetsText = targetsText.replace(
-        TARGETS_PARSER_REGEX,
-        (_match, targetId) => {
-          declaredTargets.add(targetId);
-          const x = craftState.published[targetId] ? "x" : " ";
-          return `- [${x}] ${targetId}`;
-        }
-      );
-      const unlistedTargets = Object.keys(craftState.published)
+  return issueBody.replace(TARGETS_SECTION_PARSER_REGEX, (targetsSection) => {
+    let targetsText = targetsSection.trimEnd();
+    targetsText = targetsText.replace(
+      TARGETS_PARSER_REGEX,
+      (_match, targetId) => {
+        declaredTargets.add(targetId);
+        const x = craftState.published[targetId] ? "x" : " ";
+        return `- [${x}] ${targetId}`;
+      }
+    );
+    const unlistedTargets =
+      Object.keys(craftState.published)
         .filter((target) => !declaredTargets.has(target))
         .map(
           (target) =>
             `- [${craftState.published[target] ? "x" : " "}] ${target}`
         )
-        .join("\n") + '\n';
-      targetsText += `\n${unlistedTargets}\n`;
-      return targetsText;
+        .join("\n") + "\n";
+    targetsText += `\n${unlistedTargets}\n`;
+    return targetsText;
   });
 }
 
-async function updateIssue({ context, octokit, inputs }) {
-  const { version } = inputs;
+async function updateIssue({ context, octokit }) {
   const { repo: publishRepo } = context;
   const { number: issue_number } = context.payload.issue;
 
   await Promise.all([
-    updateTargets({octokit, version, publishRepo, issue_number}),
+    updateTargets({
+      octokit,
+      stateFilePath: process.env.CRAFT_STATE_FILE_PATH,
+      publishRepo,
+      issue_number,
+    }),
     octokit.rest.issues.removeLabel({
       ...publishRepo,
       issue_number,

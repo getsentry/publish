@@ -1,3 +1,11 @@
+const { parse: parsePublishIssueTitle } = require("./publish-issue-title");
+const { getReleaseRevisionDetails } = require("./release-revision");
+const { isPublishPath } = require("./publish-location");
+const {
+  isPublishRepository,
+  isReleaseVersion,
+} = require("./publish-issue-validation");
+
 /**
  * Matches the entire "Targets" section of a github publish issue body.
  */
@@ -21,21 +29,32 @@ async function detailsFromContext({ context }) {
     throw new Error("Issue context is not defined");
   }
 
-  const titleParser =
-    /^publish: (?:getsentry\/)?(?<repo>[^/@]+)(?<path>\/[\w./-]+)?@(?<version>[\w.+-]+)$/;
-  const titleMatch = context.payload.issue.title.match(titleParser).groups;
+  let titleDetails;
+  try {
+    titleDetails = parsePublishIssueTitle(context.payload.issue.title);
+  } catch {
+    throw new Error(
+      `Invalid publish issue title: '${context.payload.issue.title}'`
+    );
+  }
+  if (!isPublishRepository(titleDetails.repo)) {
+    throw new Error(`Invalid publish issue repository: '${titleDetails.repo}'`);
+  }
+  if (!isReleaseVersion(titleDetails.version)) {
+    throw new Error(`Invalid publish issue version: '${titleDetails.version}'`);
+  }
   const dry_run = context.payload.issue.labels.some((l) => l.name === "dry-run")
     ? "1"
     : "";
-  const path = "." + (titleMatch.path || "");
-
-  // https://docs.github.com/en/get-started/using-git/dealing-with-special-characters-in-branch-and-tag-names#naming-branches-and-tags
-  const mergeTargetParser = /^Merge target: (?<merge_target>[\w.\-/]+)$/m;
-  const mergeTargetMatch = context.payload.issue.body.match(mergeTargetParser);
-  let merge_target = "";
-  if (mergeTargetMatch && mergeTargetMatch.groups) {
-    merge_target = mergeTargetMatch.groups.merge_target || "";
+  const path = "." + titleDetails.path;
+  if (!isPublishPath(path)) {
+    throw new Error(`Invalid publish issue path: '${path}'`);
   }
+
+  const { mergeTarget } = getReleaseRevisionDetails({
+    issueBody: context.payload.issue.body || "",
+    repo: titleDetails.repo,
+  });
 
   const targetsMatch = context.payload.issue.body.match(
     TARGETS_SECTION_PARSER_REGEX
@@ -48,9 +67,9 @@ async function detailsFromContext({ context }) {
   }
 
   return {
-    ...titleMatch,
+    ...titleDetails,
     dry_run,
-    merge_target,
+    merge_target: mergeTarget === "(default)" ? "" : mergeTarget,
     path,
     targets,
   };

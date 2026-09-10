@@ -28,7 +28,7 @@
     "eslint-plugin-yml": "^0.13.0",
     "peggy": "5.1.0",
     "prettier": "^2.2.1",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@actions/core": "^2.0.0",

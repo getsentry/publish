@@ -32,6 +32,68 @@ jobs:
       && github.event.issue.state == 'open'
       && startsWith(github.event.issue.title, 'publish: ')
     steps:
+      - name: Get publish code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: yarn
+
+      - name: Install yarn dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Parse target repository
+        id: target
+        continue-on-error: true
+        run: node src/publish/inputs.js
+
+      - name: Get target repository token
+        id: target-token
+        if: steps.target.outcome == 'success'
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          owner: getsentry
+          repositories: ${{ fromJSON(steps.target.outputs.result).repo }}
+
+      - name: Authorize approval
+        id: authorization
+        if: steps.target.outcome == 'success'
+        continue-on-error: true
+        env:
+          APPROVAL_ACTOR: ${{ github.actor }}
+          TARGET_REPOSITORY: ${{ fromJSON(steps.target.outputs.result).repo }}
+          TARGET_REPOSITORY_PATH: ${{ fromJSON(steps.target.outputs.result).path }}
+          TARGET_REPOSITORY_TOKEN: ${{ steps.target-token.outputs.token }}
+        run: node src/publish/authorize-approval.js
+
+      - name: Reject invalid approval
+        if: >-
+          always()
+          && (
+          steps.target.outcome != 'success'
+          || steps.authorization.outcome != 'success'
+          || steps.authorization.outputs.authorized != 'true'
+          )
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label "accepted" \
+            --remove-label "ci-pending" \
+            --remove-label "ci-ready"
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "Approval rejected. The approver needs write access to the target repository."
+          exit 1
+
       - name: Get auth token
         id: token
         uses: actions/create-github-app-token@v3
@@ -48,6 +110,7 @@ jobs:
       # Label ops are idempotent: --add/--remove don't fail if already
       # added/removed.
       - name: Mark ci-pending
+        id: mark-pending
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
@@ -56,6 +119,42 @@ jobs:
             --remove-label "ci-failed" \
             --remove-label "ci-ready" \
             --add-label "ci-pending"
+
+      - name: Revoke stranded approval
+        if: >-
+          always()
+          && steps.authorization.outputs.authorized == 'true'
+          && (
+          steps.token.outcome != 'success'
+          || steps.mark-pending.outcome != 'success'
+          )
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3; do
+            gh issue edit "${{ github.event.issue.number }}" \
+              -R "$GITHUB_REPOSITORY" \
+              --remove-label "accepted" || true
+            gh issue edit "${{ github.event.issue.number }}" \
+              -R "$GITHUB_REPOSITORY" \
+              --remove-label "ci-pending" || true
+            gh issue edit "${{ github.event.issue.number }}" \
+              -R "$GITHUB_REPOSITORY" \
+              --remove-label "ci-ready" || true
+            if labels=$(gh issue view "${{ github.event.issue.number }}" \
+              -R "$GITHUB_REPOSITORY" \
+              --json labels \
+              --jq '.labels[].name'); then
+              if ! grep -Fxq "accepted" <<< "$labels" \
+                && ! grep -Fxq "ci-pending" <<< "$labels" \
+                && ! grep -Fxq "ci-ready" <<< "$labels"; then
+                exit 0
+              fi
+            fi
+            echo "::warning::Approval cleanup attempt ${attempt} failed."
+          done
+          echo "::error::Could not revoke the stranded approval."
+          exit 1
 
       - name: Comment on issue
         env:
@@ -134,6 +233,26 @@ jobs:
       - name: Parse and set inputs
         id: inputs
         run: node .__publish__/src/publish/inputs.js
+
+      - name: Get approval target token
+        id: approval-target-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          owner: getsentry
+          repositories: ${{ fromJSON(steps.inputs.outputs.result).repo }}
+
+      - name: Verify approved target
+        env:
+          APPROVAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          APPROVAL_ISSUE_REPOSITORY: ${{ github.repository }}
+          APPROVAL_TOKEN: ${{ github.token }}
+          REQUIRE_AUTHORIZED: "true"
+          TARGET_REPOSITORY: ${{ fromJSON(steps.inputs.outputs.result).repo }}
+          TARGET_REPOSITORY_PATH: ${{ fromJSON(steps.inputs.outputs.result).path }}
+          TARGET_REPOSITORY_TOKEN: ${{ steps.approval-target-token.outputs.token }}
+        run: node .__publish__/src/publish/authorize-approval.js
 
       - name: Resolve CI-approved release revision
         id: release-revision

@@ -21,6 +21,7 @@ test("parses root and full-path publish titles", () => {
       title: "publish: getsentry/toolkit/cli@1.2.3",
     })
   ).toEqual({
+    path: "./cli",
     repo: "getsentry/toolkit",
     revision: REVISION,
     version: "1.2.3",
@@ -32,6 +33,7 @@ test("parses root and full-path publish titles", () => {
       title: "publish: toolkit/packages/cli/v2@1.2.3",
     })
   ).toEqual({
+    path: "./packages/cli/v2",
     repo: "getsentry/toolkit",
     revision: REVISION,
     version: "1.2.3",
@@ -54,7 +56,7 @@ test("uses the shared resolver in the CI poller", () => {
 
 test.each(["-toolkit", ".", "..", "__proto__"])(
   "rejects unsafe repository identity before CI API calls: %s",
-  repo => {
+  (repo) => {
     expect(() =>
       getCiPollerInput({
         issueBody,
@@ -66,7 +68,7 @@ test.each(["-toolkit", ".", "..", "__proto__"])(
 
 test.each(["--config", "1.2"])(
   "rejects invalid release version before CI API calls: %s",
-  version => {
+  (version) => {
     expect(() =>
       getCiPollerInput({
         issueBody,
@@ -78,7 +80,7 @@ test.each(["--config", "1.2"])(
 
 test.each(["publish: getsentry/@1.2.3", "publish: getsentry/toolkit$@1.2.3"])(
   "rejects malformed repository identity before CI API calls: %s",
-  title => {
+  (title) => {
     expect(() => getCiPollerInput({ issueBody, title })).toThrow(
       "Invalid publish issue title"
     );
@@ -90,7 +92,7 @@ test.each([
   "publish: getsentry/toolkit/./other@1.2.3",
   "publish: getsentry/toolkit/__proto__/other@1.2.3",
   "publish: getsentry/toolkit/--config@1.2.3",
-])("rejects unsafe publish path before CI API calls: %s", title => {
+])("rejects unsafe publish path before CI API calls: %s", (title) => {
   expect(() => getCiPollerInput({ issueBody, title })).toThrow(
     "Invalid publish issue path"
   );

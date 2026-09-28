@@ -62,6 +62,7 @@ afterEach(() => {
 
 test("uses the CI-approved revision for checkout, location resolution, and publishing", () => {
   const workflow = getWorkflow();
+  const publishJob = workflow.slice(workflow.indexOf("  publish:"));
   const revision = workflow.indexOf(
     "name: Resolve CI-approved release revision"
   );
@@ -80,7 +81,7 @@ test("uses the CI-approved revision for checkout, location resolution, and publi
   expect(workflow).toContain(
     "ref: ${{ steps.release-revision.outputs.revision }}"
   );
-  expect(workflow.match(/actions\/checkout@v7/g)).toHaveLength(2);
+  expect(publishJob.match(/actions\/checkout@v7/g)).toHaveLength(2);
   expect(workflow).toContain(
     "node .__publish__/src/publish/discover-location.js"
   );
@@ -101,10 +102,18 @@ test("publishes only on a fresh CI-ready label event", () => {
   const workflow = getWorkflow();
 
   expect(workflow).toContain("github.event.label.name == 'ci-ready'");
-  expect(workflow).toContain("contains(github.event.issue.labels.*.name, 'accepted')");
-  expect(workflow).toContain("contains(github.event.issue.labels.*.name, 'ci-ready')");
-  expect(workflow).toContain("!contains(github.event.issue.labels.*.name, 'ci-pending')");
-  expect(workflow).toContain("!contains(github.event.issue.labels.*.name, 'ci-failed')");
+  expect(workflow).toContain(
+    "contains(github.event.issue.labels.*.name, 'accepted')"
+  );
+  expect(workflow).toContain(
+    "contains(github.event.issue.labels.*.name, 'ci-ready')"
+  );
+  expect(workflow).toContain(
+    "!contains(github.event.issue.labels.*.name, 'ci-pending')"
+  );
+  expect(workflow).toContain(
+    "!contains(github.event.issue.labels.*.name, 'ci-failed')"
+  );
 });
 
 test("uses Craft's legacy root state filename", () => {

@@ -36,7 +36,15 @@ function writeExecutable(path, content) {
   writeFileSync(path, content, { mode: 0o755 });
 }
 
-function runPoller({ initialExit = 0, updateOutput = "", issueBody = "" } = {}) {
+function runPoller({
+  authorizationExit = 0,
+  initialExit = 0,
+  updateOutput = "",
+  issueBody = "",
+  liveIssueBody = issueBody,
+  initialLabels = ["accepted", "ci-pending"],
+  liveLabels = initialLabels,
+} = {}) {
   const directory = mkdtempSync(join(tmpdir(), "ci-poller-workflow-test-"));
   temporaryDirectories.push(directory);
   const binDirectory = join(directory, "bin");
@@ -51,7 +59,9 @@ function runPoller({ initialExit = 0, updateOutput = "", issueBody = "" } = {}) 
     join(binDirectory, "node"),
     `#!/usr/bin/env bash
 set -eu
-if [[ -n "\${PUBLISH_REVISION:-}" ]]; then
+if [[ "\${REQUIRE_AUTHORIZED:-}" == "true" ]]; then
+  exit "\${AUTHORIZATION_EXIT:-0}"
+elif [[ -n "\${PUBLISH_REVISION:-}" ]]; then
   printf '%s' "\${NODE_UPDATE_OUTPUT:-}"
 elif [[ "\${NODE_INITIAL_EXIT:-0}" != "0" ]]; then
   exit "\${NODE_INITIAL_EXIT}"
@@ -83,6 +93,9 @@ case "$*" in
   "issue list "*)
     printf '%s' "$GH_ISSUES"
     ;;
+  "issue view "*)
+    printf '%s' "$GH_LIVE_ISSUE"
+    ;;
   *"/check-suites"*)
     printf '%s' "release/1.2.3"
     ;;
@@ -110,36 +123,51 @@ esac
   const issue = JSON.stringify([
     {
       body: issueBody,
+      labels: initialLabels.map((name) => ({ name })),
       number: 1,
       title: "publish: getsentry/toolkit@1.2.3",
     },
   ]);
+  const liveIssue = JSON.stringify({
+    body: liveIssueBody,
+    labels: liveLabels.map((name) => ({ name })),
+    title: "publish: getsentry/toolkit@1.2.3",
+  });
   const initialOutput = JSON.stringify({
+    path: ".",
     repo: "getsentry/toolkit",
     revision: INITIAL_REVISION,
     version: "1.2.3",
   });
-  const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", getPollerScript()], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      CAPTURED_BODY: capturedBody,
-      GH_LOG: logFile,
-      GH_ISSUES: issue,
-      GITHUB_REPOSITORY: "getsentry/publish",
-      NODE_INITIAL_EXIT: String(initialExit),
-      NODE_INITIAL_OUTPUT: initialOutput,
-      NODE_UPDATE_OUTPUT: updateOutput,
-      PATH: `${binDirectory}:${process.env.PATH}`,
-      TEMPORARY_FILES: temporaryFiles,
-    },
-  });
+  const result = spawnSync(
+    "bash",
+    ["-e", "-o", "pipefail", "-c", getPollerScript()],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        AUTHORIZATION_EXIT: String(authorizationExit),
+        CAPTURED_BODY: capturedBody,
+        GH_LOG: logFile,
+        GH_ISSUES: issue,
+        GH_LIVE_ISSUE: liveIssue,
+        GITHUB_REPOSITORY: "getsentry/publish",
+        NODE_INITIAL_EXIT: String(initialExit),
+        NODE_INITIAL_OUTPUT: initialOutput,
+        NODE_UPDATE_OUTPUT: updateOutput,
+        PATH: `${binDirectory}:${process.env.PATH}`,
+        TEMPORARY_FILES: temporaryFiles,
+      },
+    }
+  );
 
   return {
     capturedBody,
     log: readFileSync(logFile, "utf8"),
     result,
-    temporaryFiles: readdirSync(temporaryFiles).filter(file => file !== "counter"),
+    temporaryFiles: readdirSync(temporaryFiles).filter(
+      (file) => file !== "counter"
+    ),
   };
 }
 
@@ -176,13 +204,16 @@ test("skips an issue without editing it when the rewrite response body is empty"
 test.each([
   ["malformed JSON", "not JSON"],
   ["a non-object JSON value", "[]"],
-])("skips an issue without editing it when the rewrite response is %s", (_name, updateOutput) => {
-  const poller = runPoller({ updateOutput });
+])(
+  "skips an issue without editing it when the rewrite response is %s",
+  (_name, updateOutput) => {
+    const poller = runPoller({ updateOutput });
 
-  expect(poller.result.status, poller.result.stderr).toBe(0);
-  expect(poller.log).not.toContain("--body-file");
-  expect(poller.temporaryFiles).toEqual([]);
-});
+    expect(poller.result.status, poller.result.stderr).toBe(0);
+    expect(poller.log).not.toContain("--body-file");
+    expect(poller.temporaryFiles).toEqual([]);
+  }
+);
 
 test("preserves all rewrite body bytes outside the revision", () => {
   const body = "canonical issue body\n\n";
@@ -194,4 +225,50 @@ test("preserves all rewrite body bytes outside the revision", () => {
   expect(poller.result.status, poller.result.stderr).toBe(0);
   expect(readFileSync(poller.capturedBody, "utf8")).toBe(body);
   expect(poller.temporaryFiles).toEqual([]);
+});
+
+test("revokes approval when the request changes before ci-ready", () => {
+  const body = "canonical issue body\n";
+  const poller = runPoller({
+    issueBody: body,
+    liveIssueBody: "changed issue body\n",
+    updateOutput: JSON.stringify({ issueBody: body }),
+  });
+
+  expect(poller.result.status, poller.result.stderr).toBe(0);
+  expect(poller.log).toContain(
+    "--remove-label accepted --remove-label ci-pending"
+  );
+  expect(poller.log).not.toContain("--add-label ci-ready");
+});
+
+test("revokes approval when the approver loses target access", () => {
+  const body = "canonical issue body\n";
+  const poller = runPoller({
+    authorizationExit: 1,
+    issueBody: body,
+    updateOutput: JSON.stringify({ issueBody: body }),
+  });
+
+  expect(poller.result.status, poller.result.stderr).toBe(0);
+  expect(poller.log).toContain(
+    "--remove-label accepted --remove-label ci-pending"
+  );
+  expect(poller.log).not.toContain("--add-label ci-ready");
+});
+
+test("revokes approval when dry-run changes before ci-ready", () => {
+  const body = "canonical issue body\n";
+  const poller = runPoller({
+    initialLabels: ["accepted", "ci-pending", "dry-run"],
+    issueBody: body,
+    liveLabels: ["accepted", "ci-pending"],
+    updateOutput: JSON.stringify({ issueBody: body }),
+  });
+
+  expect(poller.result.status, poller.result.stderr).toBe(0);
+  expect(poller.log).toContain(
+    "--remove-label accepted --remove-label ci-pending"
+  );
+  expect(poller.log).not.toContain("--add-label ci-ready");
 });

@@ -26,17 +26,13 @@ function isPublishPath(path) {
     typeof path === "string" &&
     (path === "." ||
       (path.startsWith("./") &&
-        path
-          .slice(2)
-          .split("/")
-          .every(isSafeWorkspaceSegment)))
+        path.slice(2).split("/").every(isSafeWorkspaceSegment)))
   );
 }
 
 function isWorkspaceName(name) {
   return (
-    typeof name === "string" &&
-    name.split("/").every(isSafeWorkspaceSegment)
+    typeof name === "string" && name.split("/").every(isSafeWorkspaceSegment)
   );
 }
 

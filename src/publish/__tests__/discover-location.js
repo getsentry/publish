@@ -1,6 +1,9 @@
 import { afterEach, expect, test, vi } from "vitest";
 
-const { discoverLocation, getWorkspaceNames } = require("../discover-location.js");
+const {
+  discoverLocation,
+  getWorkspaceNames,
+} = require("../discover-location.js");
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -29,7 +32,11 @@ test("discovers exact workspace paths using the released Craft image", () => {
   ).toEqual({ path: ".", workspace: "packages/CLI" });
   expect(execFile).toHaveBeenCalledWith(
     "docker",
-    expect.arrayContaining(["getsentry/craft:latest", "workspace", "list"]),
+    expect.arrayContaining([
+      "getsentry/craft@sha256:9a4a5d5efa44a00c2215078ead39800d4aaa5a97908b94f45a64d7d506d6e14b",
+      "workspace",
+      "list",
+    ]),
     { encoding: "utf8" }
   );
 });

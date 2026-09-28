@@ -36,24 +36,24 @@ Ways to improve credential management for releases:
 Already existing credentials need to be re-organized to reduce the total amount of people that have access to it. Ideally basically nobody has access as these need to be rotated when employees depart. Proposed setup:
 
 - OSS
-    - Users
-        - *redacted*
-    - Keys *(after the dash where the key is currently)*
-        - PyPI Bot — OSS
-        - [Crates.io](http://crates.io) — OSS
-        - DockerHub — OSS
-        - Github (getsentry-bot) — OSS
-        - NPM Bot — SDKs
-        - Cocoapods — SDKs
-        - Nexus — SDKs
-        - Packagist — SDKs
-        - RubyGems — SDKs + Ops
-        - Code Signing Certificate — SDKs
-        - Bintray — SDKs
-        - Bot Apple ITC — Shared
-        - [clojars.org](http://clojars.org) → SDKs
+  - Users
+    - _redacted_
+  - Keys _(after the dash where the key is currently)_
+    - PyPI Bot — OSS
+    - [Crates.io](http://crates.io) — OSS
+    - DockerHub — OSS
+    - Github (getsentry-bot) — OSS
+    - NPM Bot — SDKs
+    - Cocoapods — SDKs
+    - Nexus — SDKs
+    - Packagist — SDKs
+    - RubyGems — SDKs + Ops
+    - Code Signing Certificate — SDKs
+    - Bintray — SDKs
+    - Bot Apple ITC — Shared
+    - [clojars.org](http://clojars.org) → SDKs
 - SDK Low Security
-    - Users
-        - SDK Team
-    - Keys
-        - Remaining items in SDKs vault
+  - Users
+    - SDK Team
+  - Keys
+    - Remaining items in SDKs vault

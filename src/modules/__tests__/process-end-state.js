@@ -55,6 +55,61 @@ describe("publish failed", () => {
       }
     `);
   });
+
+  test("reports telemetry when the issue comment fails", async () => {
+    const report = vi.fn();
+
+    await expect(
+      processEndState({
+        ...failureArgs,
+        report,
+        octokit: {
+          rest: {
+            actions: failureArgs.octokit.rest.actions,
+            issues: {
+              createComment: vi
+                .fn()
+                .mockRejectedValue(new Error("unavailable")),
+            },
+          },
+        },
+      })
+    ).resolves.toBeUndefined();
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ inputs: failureArgs.inputs })
+    );
+  });
+
+  test("reports telemetry when workflow lookup fails", async () => {
+    const report = vi.fn();
+
+    await expect(
+      processEndState({
+        ...failureArgs,
+        report,
+        octokit: {
+          rest: {
+            actions: {
+              getWorkflowRun: vi
+                .fn()
+                .mockRejectedValue(new Error("unavailable")),
+            },
+            issues: {
+              createComment: vi.fn(),
+            },
+          },
+        },
+      })
+    ).resolves.toBeUndefined();
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputs: failureArgs.inputs,
+        details: expect.objectContaining({ workflowInfo: null }),
+      })
+    );
+  });
 });
 
 describe("publish cancelleded", () => {
@@ -170,6 +225,57 @@ describe("publish success", () => {
         "state": "closed",
       }
     `);
+  });
+
+  test("closes the issue before workflow lookup and comments", async () => {
+    const update = vi.fn();
+    const getWorkflowRun = vi.fn().mockRejectedValue(new Error("unavailable"));
+
+    await expect(
+      processEndState({
+        ...successArgs,
+        octokit: {
+          rest: {
+            actions: { getWorkflowRun },
+            issues: { createComment: vi.fn(), update },
+          },
+        },
+      })
+    ).resolves.toBeUndefined();
+
+    expect(update).toHaveBeenCalledWith({
+      issue_number: "211",
+      owner: "getsentry",
+      repo: "publish",
+      state: "closed",
+    });
+    expect(update.mock.invocationCallOrder[0]).toBeLessThan(
+      getWorkflowRun.mock.invocationCallOrder[0]
+    );
+  });
+
+  test("reports telemetry when closing the issue fails", async () => {
+    const report = vi.fn();
+
+    await expect(
+      processEndState({
+        ...successArgs,
+        report,
+        octokit: {
+          rest: {
+            actions: successArgs.octokit.rest.actions,
+            issues: {
+              createComment: vi.fn(),
+              update: vi.fn().mockRejectedValue(new Error("unavailable")),
+            },
+          },
+        },
+      })
+    ).resolves.toBeUndefined();
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ inputs: successArgs.inputs })
+    );
   });
 });
 

@@ -5,9 +5,7 @@ function isRevision(revision) {
 }
 
 function getReleaseRevisionDetails({ issueBody, repo }) {
-  if (
-    parse(issueBody, { startRule: "CheckRunsLinkCount" }) !== 1
-  ) {
+  if (parse(issueBody, { startRule: "CheckRunsLinkCount" }) !== 1) {
     throw new Error(
       `Expected exactly one View check runs link in Quick links for getsentry/${repo}.`
     );
@@ -40,12 +38,19 @@ function updateReleaseRevision({ issueBody, repo, revision }) {
     throw new Error("Release revision must be a lowercase 40-character SHA.");
   }
 
-  const { revision: currentRevision } = getReleaseRevisionDetails({ issueBody, repo });
-  return `${issueBody.slice(0, currentRevision.start)}${revision}${issueBody.slice(currentRevision.end)}`;
+  const { revision: currentRevision } = getReleaseRevisionDetails({
+    issueBody,
+    repo,
+  });
+  return `${issueBody.slice(
+    0,
+    currentRevision.start
+  )}${revision}${issueBody.slice(currentRevision.end)}`;
 }
 
 module.exports = {
   getReleaseRevision,
   getReleaseRevisionDetails,
+  isRevision,
   updateReleaseRevision,
 };

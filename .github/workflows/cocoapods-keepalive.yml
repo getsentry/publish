@@ -6,7 +6,6 @@ on:
     # This runs every day at midnight UTC to keep the current token alive
     # See: https://github.com/CocoaPods/trunk.cocoapods.org/blob/a1869790e9ae2229b6985b6af4532da814202558/app/models/session.rb#L9
     - cron: "0 0 * * *" # Runs every day at midnight UTC
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,13 +15,17 @@ jobs:
     name: Refresh CocoaPods Session
     runs-on: macos-15
     environment: production
-    env:
-      COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
 
     steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - name: Install CocoaPods
-        run: gem install cocoapods
+        run: bundle install --jobs 4 --retry 3
       - name: Print CocoaPods Version
-        run: pod --version
+        run: bundle exec pod --version
       - name: Refresh CocoaPods Session
-        run: pod trunk me > /dev/null 2>&1
+        env:
+          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+        run: bundle exec pod trunk me > /dev/null 2>&1

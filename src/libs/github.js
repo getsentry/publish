@@ -6,8 +6,10 @@
  */
 function getGitHubToken() {
   if (!process.env.GITHUB_TOKEN) {
-    throw new Error('No "GITHUB_TOKEN" environment variable found. ' +
-    'Please ensure the workflow is configured correctly');
+    throw new Error(
+      'No "GITHUB_TOKEN" environment variable found. ' +
+        "Please ensure the workflow is configured correctly"
+    );
   }
   return process.env.GITHUB_TOKEN;
 }

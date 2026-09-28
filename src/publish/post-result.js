@@ -1,11 +1,31 @@
-const processEndState = require('../modules/process-end-state');
-const {getGitHubToken} = require('../libs/github');
-const github = require('@actions/github');
+const processEndState = require("../modules/process-end-state.js");
+const { getGitHubToken } = require("../libs/github.js");
+const github = require("@actions/github");
 
-const context = github.context;
-const octokit = github.getOctokit(getGitHubToken());
-const inputs = JSON.parse(process.env.PUBLISH_ARGS);
-const args = process.argv.slice(2);
-const status = args[0];
+async function main({
+  context = github.context,
+  octokit = github.getOctokit(getGitHubToken()),
+  report = processEndState,
+  status = process.argv.slice(2)[0],
+} = {}) {
+  let inputs = {};
 
-processEndState({context, octokit, inputs, status});
+  if (process.env.PUBLISH_ARGS) {
+    try {
+      inputs = JSON.parse(process.env.PUBLISH_ARGS);
+    } catch {
+      console.warn("Could not parse publish inputs; reporting without them");
+    }
+  }
+
+  await report({ context, octokit, inputs, status });
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { main };

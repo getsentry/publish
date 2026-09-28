@@ -5,31 +5,123 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   auto-approve:
     runs-on: ubuntu-latest
+    environment: production
     if: |
       (github.actor == 'sentry-release-bot[bot]' || github.actor == 'getsantry[bot]') &&
       startsWith(github.event.issue.title, 'publish: ')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          sparse-checkout: auto-approve-repos.txt
-          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Get auth token
         id: token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+      - name: Bind request snapshot
+        id: request-digest
+        run: node src/publish/request-digest-from-event.js
       - name: Auto-approve if repo is in the list
+        id: auto-approval
+        if: steps.request-digest.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
         run: |
-          REPO=$(echo "$ISSUE_TITLE" | sed -n 's/^publish: \(.*\)@.*/\1/p')
+          set -euo pipefail
+          REPO=$(sed -n 's/^publish: \(.*\)@.*/\1/p' <<< "$ISSUE_TITLE")
           if [ -n "$REPO" ] && grep -qxF "$REPO" auto-approve-repos.txt; then
+            echo "attempted=true" >> "$GITHUB_OUTPUT"
             gh issue edit "$ISSUE_URL" --add-label accepted
+            echo "approved=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Record automated approval attestation
+        id: attestation
+        if: steps.auto-approval.outputs.approved == 'true'
+        env:
+          APPROVAL_TOKEN: ${{ github.token }}
+          APPROVAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          APPROVAL_ISSUE_REPOSITORY: ${{ github.repository }}
+          APPROVAL_ISSUE_TITLE: ${{ github.event.issue.title }}
+          AUTO_APPROVER: ${{ github.actor }}
+          EXPECTED_REQUEST_DIGEST: ${{ steps.request-digest.outputs.request_digest }}
+          PUBLISH_ATTESTATION_SECRET: ${{ secrets.PUBLISH_ATTESTATION_SECRET }}
+        run: node src/publish/record-auto-approval-attestation.js
+      - name: Post automated approval attestation
+        id: post-attestation
+        if: steps.auto-approval.outputs.approved == 'true' && steps.attestation.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTO_APPROVAL_ATTESTATION: ${{ steps.attestation.outputs.auto_approval_attestation }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+        run: gh issue comment "$ISSUE_URL" --body "$AUTO_APPROVAL_ATTESTATION"
+      - name: Mark ci-pending
+        id: mark-pending
+        continue-on-error: true
+        if: >-
+          steps.auto-approval.outputs.approved == 'true'
+          && steps.attestation.outcome == 'success'
+          && steps.post-attestation.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label ci-failed \
+            --remove-label ci-ready \
+            --add-label ci-pending
+      - name: Get poller app token
+        id: poller-token
+        continue-on-error: true
+        if: >-
+          always()
+          && steps.auto-approval.outputs.attempted == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
+      - name: Enable cron poller
+        id: enable-poller
+        continue-on-error: true
+        if: >-
+          always()
+          && steps.auto-approval.outputs.attempted == 'true'
+          && steps.poller-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.poller-token.outputs.token }}
+        run: gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"
+      - name: Trigger CI poller
+        id: trigger-poller
+        if: steps.auto-approval.outputs.approved == 'true' && steps.attestation.outcome == 'success' && steps.mark-pending.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+            -f event_type=ci-poller
+      - name: Revoke stranded automated approval
+        if: >-
+          always()
+          && steps.auto-approval.outputs.attempted == 'true'
+          && (
+           steps.attestation.outcome != 'success'
+           || steps.post-attestation.outcome != 'success'
+           || steps.mark-pending.outcome != 'success'
+           || steps.trigger-poller.outcome != 'success'
+           || steps.enable-poller.outcome != 'success'
+           )
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label accepted \
+            --remove-label ci-pending \
+            --remove-label ci-ready

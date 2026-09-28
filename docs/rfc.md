@@ -6,7 +6,7 @@ This design document is written to address the concerns mentioned in [Key Rotati
 
 1. We need to be able to quickly recycle all publishing tokens (NPM, PyPI, Cargo, Docker, etc.) at will without disrupting our releases or our developer flow
 2. We need to limit the publishing tokens to authorized personnel only and not leak them in any way
-    1. GitHub secrets is not enough as it lets anyone with write access to the repo to access the secrets and scuttle them out, even in a brand new PR. Example: [https://github.com/getsentry/sentry/pull/21930](https://github.com/getsentry/sentry/pull/21930)
+   1. GitHub secrets is not enough as it lets anyone with write access to the repo to access the secrets and scuttle them out, even in a brand new PR. Example: [https://github.com/getsentry/sentry/pull/21930](https://github.com/getsentry/sentry/pull/21930)
 3. We need SDK releases to be approved by a manager or senior engineer per our SOC/ISO compliance policy
 4. We have per-project release/publish configurations that repeat almost the same pattern, causing divergence of code
 
@@ -17,8 +17,9 @@ This design document is written to address the concerns mentioned in [Key Rotati
 3. Add all other engineers with read access to the repo
 4. Create a structured issue template to request releases
 5. Have a "release" action on each repo, that runs `craft prepare` to get the release branch ready and opens an issue on the release repo for publishing with the following information:
-    1. repository name
-    2. version to release
+
+   1. repository name
+   2. version to release
 
 6. The owners of the release repo adds an "accepted" tag to trigger the actual release
 7. The release then closes the issue with a success message

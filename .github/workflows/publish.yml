@@ -1,18 +1,18 @@
 name: Publish
+run-name: "Publish issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}"
 on:
   issues:
     types: [labeled]
 
 concurrency:
-  # Use the issue title (e.g. "publish: getsentry/foo@1.2.3") so duplicate
-  # issues for the same repo@version share a concurrency group.
-  group: ${{ github.event.issue.title }}
+  # Use the immutable issue number so renaming the request cannot move a
+  # second publish run into a different concurrency group.
+  group: publish-issue-${{ github.event.issue.number }}
   cancel-in-progress: false
 
 permissions:
   contents: read
   issues: write
-  packages: write
 
 jobs:
   # When accepted is added to a publish issue:
@@ -31,13 +31,104 @@ jobs:
       github.event.label.name == 'accepted'
       && github.event.issue.state == 'open'
       && startsWith(github.event.issue.title, 'publish: ')
+      && github.actor != 'sentry-internal-app[bot]'
     steps:
+      - name: Get publish code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Install yarn dependencies
+        run: yarn install --frozen-lockfile
+
       - name: Get auth token
         id: token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+
+      - name: Bind request snapshot
+        id: request-digest
+        run: node src/publish/request-digest-from-event.js
+
+      - name: Parse target repository
+        id: target
+        run: node src/publish/inputs.js
+
+      # The release bot sees all target repositories. This checks the actor's
+      # current effective target-repository role without exposing RBAC data.
+      - name: Get release bot auth token
+        id: release-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          owner: getsentry
+          repositories: ${{ fromJSON(steps.target.outputs.result).repo }}
+
+      - name: Authorize approval
+        id: authorization
+        continue-on-error: true
+        env:
+          APPROVAL_TOKEN: ${{ github.token }}
+          APPROVAL_ACTOR: ${{ github.actor }}
+          APPROVAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          APPROVAL_ISSUE_REPOSITORY: ${{ github.repository }}
+          APPROVAL_ISSUE_TITLE: ${{ github.event.issue.title }}
+          EXPECTED_REQUEST_DIGEST: ${{ steps.request-digest.outputs.request_digest }}
+          PUBLISH_ATTESTATION_SECRET: ${{ secrets.PUBLISH_ATTESTATION_SECRET }}
+          TARGET_REPOSITORY_TOKEN: ${{ steps.release-token.outputs.token }}
+        run: node src/publish/authorize-approval.js
+
+      - name: Record approval attestation
+        id: attestation
+        if: >-
+          steps.authorization.outcome == 'success'
+          && steps.authorization.outputs.authorized == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "${{ steps.authorization.outputs.approval_attestation }}"
+
+      - name: Validate approval attestation
+        id: approval-validation
+        continue-on-error: true
+        if: steps.attestation.outcome == 'success'
+        env:
+          APPROVAL_TOKEN: ${{ github.token }}
+          APPROVAL_ATTESTATION_AUTHOR: github-actions[bot]
+          APPROVAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          APPROVAL_ISSUE_REPOSITORY: ${{ github.repository }}
+          APPROVAL_ISSUE_TITLE: ${{ github.event.issue.title }}
+          EXPECTED_REQUEST_DIGEST: ${{ steps.request-digest.outputs.request_digest }}
+          PUBLISH_ATTESTATION_SECRET: ${{ secrets.PUBLISH_ATTESTATION_SECRET }}
+        run: node src/publish/validate-approval-attestation.js
+
+      - name: Reject invalid approval
+        if: >-
+          always()
+          && (
+          steps.authorization.outcome != 'success'
+          || steps.authorization.outputs.authorized != 'true'
+          || steps.attestation.outcome != 'success'
+          || steps.approval-validation.outcome != 'success'
+          )
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label "accepted" \
+            --remove-label "ci-pending" \
+            --remove-label "ci-ready"
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "Approval is invalid or could not be verified. Re-add the accepted label to retry after resolving the issue."
+          exit 1
 
       # Reset to a clean ci-pending state:
       # - Remove ci-failed (retries after CI was fixed)
@@ -48,6 +139,8 @@ jobs:
       # Label ops are idempotent: --add/--remove don't fail if already
       # added/removed.
       - name: Mark ci-pending
+        id: mark-pending
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
@@ -57,7 +150,21 @@ jobs:
             --remove-label "ci-ready" \
             --add-label "ci-pending"
 
+      # Trigger the poller before non-critical comments. If this immediate
+      # path fails, the cron path below can still pick up ci-pending.
+      - name: Trigger CI poller
+        id: trigger-poller
+        continue-on-error: true
+        if: always() && steps.mark-pending.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+            -f event_type=ci-poller
+
       - name: Comment on issue
+        if: always() && steps.mark-pending.outcome == 'success'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -75,61 +182,132 @@ jobs:
       - name: Get poller app token
         id: poller-token
         continue-on-error: true
-        uses: actions/create-github-app-token@v3
+        if: always()
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
           private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
 
       - name: Enable cron poller
-        if: steps.poller-token.outcome == 'success'
+        id: enable-poller
+        continue-on-error: true
+        if: always() && steps.poller-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.poller-token.outputs.token }}
         run: |
           gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"
 
-      # Trigger the CI poller immediately instead of waiting for the next cron tick.
-      # Uses the app token — GITHUB_TOKEN workflow_dispatch events are suppressed.
-      - name: Trigger CI poller
+      - name: Revoke stranded approval
+        if: >-
+          always()
+          && (
+          steps.mark-pending.outcome != 'success'
+          || (
+          steps.trigger-poller.outcome != 'success'
+          && steps.enable-poller.outcome != 'success'
+          )
+          )
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run ci-poller.yml -R "$GITHUB_REPOSITORY"
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label "ci-pending" \
+            --remove-label "accepted" \
+            --remove-label "ci-ready"
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "CI polling could not be started. Re-add the accepted label to retry." || true
+          exit 1
 
   publish:
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
+      issues: write
+      packages: write
     name: Publish a new version
-    # Publish when ci-ready is present (added by the poller after CI passes).
-    # Fires ONLY on ci-ready label events — not accepted — to avoid racing
-    # with waiting-for-ci on the same event. The poller always adds ci-ready
-    # after checking CI (even if ci-ready was already present, waiting-for-ci
-    # removes it first so a fresh labeled event fires), so this gate is
-    # guaranteed to trigger on the happy path.
+    # Publish when ci-ready is added by the poller after CI passes. The
+    # poller keeps ci-pending until it records the event-bound proof; the
+    # validation step waits for that live handoff to finish.
     if: >-
       github.event.issue.state == 'open'
-      && github.event.label.name == 'ci-ready'
-      && contains(github.event.issue.labels.*.name, 'accepted')
-      && contains(github.event.issue.labels.*.name, 'ci-ready')
-      && !contains(github.event.issue.labels.*.name, 'ci-pending')
-      && !contains(github.event.issue.labels.*.name, 'ci-failed')
+       && github.event.label.name == 'ci-ready'
+       && contains(github.event.issue.labels.*.name, 'accepted')
+       && contains(github.event.issue.labels.*.name, 'ci-ready')
+       && !contains(github.event.issue.labels.*.name, 'ci-failed')
     timeout-minutes: 90
     env:
       SENTRY_DSN: "https://303a687befb64dc2b40ce4c96de507c5@o1.ingest.sentry.io/6183838"
     steps:
       - name: Get repo contents
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: .__publish__
+          persist-credentials: false
+
+      - name: Prepare attestation secret
+        env:
+          PUBLISH_ATTESTATION_SECRET: ${{ secrets.PUBLISH_ATTESTATION_SECRET }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$PUBLISH_ATTESTATION_SECRET" > "$RUNNER_TEMP/publish-attestation-secret"
+
+      - name: Bind request snapshot
+        id: request-digest
+        run: node .__publish__/src/publish/request-digest-from-event.js
+
+      - name: Validate approval attestation
+        id: approval-validation
+        continue-on-error: true
+        env:
+          APPROVAL_TOKEN: ${{ github.token }}
+          APPROVAL_ATTESTATION_AUTHOR: github-actions[bot]
+          APPROVAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          APPROVAL_ISSUE_REPOSITORY: ${{ github.repository }}
+          APPROVAL_ISSUE_TITLE: ${{ github.event.issue.title }}
+          EXPECTED_REQUEST_DIGEST: ${{ steps.request-digest.outputs.request_digest }}
+          REQUIRE_CI_PENDING_ABSENT: "true"
+          REQUIRE_CI_READY_ATTESTATION: "true"
+          ATTESTATION_SECRET_FILE: ${{ runner.temp }}/publish-attestation-secret
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if PUBLISH_ATTESTATION_SECRET="$(<"$ATTESTATION_SECRET_FILE")" \
+              node .__publish__/src/publish/validate-approval-attestation.js; then
+              exit 0
+            fi
+            if [[ "$attempt" != "6" ]]; then
+              sleep 5
+            fi
+          done
+          exit 1
+
+      - name: Reject invalid approval
+        if: always() && steps.approval-validation.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label "accepted" \
+            --remove-label "ci-pending" \
+            --remove-label "ci-ready"
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "Approval is invalid or could not be verified. Re-add the accepted label to retry after resolving the issue."
+          exit 1
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 24
           cache: yarn
           cache-dependency-path: .__publish__/yarn.lock
 
       - name: Install yarn dependencies
-        run: yarn install --cwd ".__publish__"
+        run: yarn install --cwd ".__publish__" --frozen-lockfile
 
       - name: Parse and set inputs
         id: inputs
@@ -144,19 +322,21 @@ jobs:
 
       - name: Inform start
         if: steps.inputs.outcome == 'success' && steps.release-revision.outcome == 'success'
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/post-workflow-details.js
 
       - name: Get Release Bot auth token
         id: token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
-          owner: getsentry # create token that have access to all repos
+          owner: getsentry
+          repositories: ${{ fromJSON(steps.inputs.outputs.result).repo }}
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         name: Check out target repo
         if: ${{ steps.inputs.outputs.result }}
         with:
@@ -165,6 +345,7 @@ jobs:
           repository: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
           token: ${{ steps.token.outputs.token }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Resolve publish location
         id: location
@@ -228,18 +409,233 @@ jobs:
           echo "state_file=$state_file" >> "$GITHUB_OUTPUT"
           echo "Wrote state file: $state_file"
 
-      - uses: docker://getsentry/craft:latest
+      - name: Revalidate release branch head
+        id: branch-validation
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_REPOSITORY: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
+          RELEASE_REVISION: ${{ steps.release-revision.outputs.revision }}
+        run: |
+          set -euo pipefail
+          resolve_release_branch() {
+            local check_suites branches branch_count
+            if ! check_suites=$(gh api \
+              "repos/$RELEASE_REPOSITORY/commits/$RELEASE_REVISION/check-suites"); then
+              return 1
+            fi
+            if ! branches=$(printf '%s' "$check_suites" | jq -r --arg revision "$RELEASE_REVISION" \
+              '[.check_suites[]? | select(.head_sha == $revision) | .head_branch | select(type == "string" and length > 0)] | unique | .[]'); then
+              return 1
+            fi
+            if [[ -z "$branches" ]]; then
+              return 1
+            fi
+            branch_count=$(printf '%s\n' "$branches" | wc -l | tr -d ' ')
+            if [[ "$branch_count" != "1" ]]; then
+              return 1
+            fi
+            printf '%s' "$branches"
+          }
+
+          if ! branch=$(resolve_release_branch); then
+            echo "::error::Could not resolve the release branch for $RELEASE_REPOSITORY@$RELEASE_REVISION."
+            exit 1
+          fi
+          head=$(gh api \
+            "repos/$RELEASE_REPOSITORY/git/ref/heads/$branch" \
+            --jq '.object.sha')
+          if [[ "$head" != "$RELEASE_REVISION" ]]; then
+            echo "::error::Release branch $branch moved from $RELEASE_REVISION to $head."
+            exit 1
+          fi
+
+      - name: Reject moved release branch
+        if: always() && steps.branch-validation.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label "accepted" \
+            --remove-label "ci-pending" \
+            --remove-label "ci-ready"
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "The release branch moved after CI. Review the updated request and re-add the accepted label to retry." || true
+          exit 1
+
+      - name: Revalidate approval attestation
+        id: final-approval-validation
+        continue-on-error: true
+        env:
+          APPROVAL_TOKEN: ${{ github.token }}
+          APPROVAL_ATTESTATION_AUTHOR: github-actions[bot]
+          APPROVAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          APPROVAL_ISSUE_REPOSITORY: ${{ github.repository }}
+          APPROVAL_ISSUE_TITLE: ${{ github.event.issue.title }}
+          EXPECTED_REQUEST_DIGEST: ${{ steps.request-digest.outputs.request_digest }}
+          REQUIRE_CI_PENDING_ABSENT: "true"
+          REQUIRE_CI_READY_ATTESTATION: "true"
+          ATTESTATION_SECRET_FILE: ${{ runner.temp }}/publish-attestation-secret
+        run: |
+          PUBLISH_ATTESTATION_SECRET="$(<"$ATTESTATION_SECRET_FILE")" \
+            node .__publish__/src/publish/validate-approval-attestation.js
+
+      - name: Reject revoked approval
+        if: always() && steps.final-approval-validation.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label "accepted" \
+            --remove-label "ci-pending" \
+            --remove-label "ci-ready"
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "Approval is invalid or could not be verified. Re-add the accepted label to retry after resolving the issue."
+          exit 1
+
+      # Repeat the branch-head fence after the final approval read. The
+      # release branch can move during that read, so the earlier check is not
+      # sufficient to authorize Craft.
+      - name: Revalidate release branch immediately before Craft
+        id: final-branch-validation
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          APPROVAL_TOKEN: ${{ github.token }}
+          APPROVAL_ATTESTATION_AUTHOR: github-actions[bot]
+          APPROVAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          APPROVAL_ISSUE_REPOSITORY: ${{ github.repository }}
+          APPROVAL_ISSUE_TITLE: ${{ github.event.issue.title }}
+          EXPECTED_REQUEST_DIGEST: ${{ steps.request-digest.outputs.request_digest }}
+          RELEASE_REPOSITORY: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
+          RELEASE_REVISION: ${{ steps.release-revision.outputs.revision }}
+          ATTESTATION_SECRET_FILE: ${{ runner.temp }}/publish-attestation-secret
+        run: |
+          set -euo pipefail
+          resolve_release_branch() {
+            local check_suites branches branch_count
+            if ! check_suites=$(gh api \
+              "repos/$RELEASE_REPOSITORY/commits/$RELEASE_REVISION/check-suites"); then
+              return 1
+            fi
+            if ! branches=$(printf '%s' "$check_suites" | jq -r --arg revision "$RELEASE_REVISION" \
+              '[.check_suites[]? | select(.head_sha == $revision) | .head_branch | select(type == "string" and length > 0)] | unique | .[]'); then
+              return 1
+            fi
+            if [[ -z "$branches" ]]; then
+              return 1
+            fi
+            branch_count=$(printf '%s\n' "$branches" | wc -l | tr -d ' ')
+            if [[ "$branch_count" != "1" ]]; then
+              return 1
+            fi
+            printf '%s' "$branches"
+          }
+
+          if ! branch=$(resolve_release_branch); then
+            echo "::error::Could not resolve the release branch for $RELEASE_REPOSITORY@$RELEASE_REVISION."
+            exit 1
+          fi
+          head=$(gh api \
+            "repos/$RELEASE_REPOSITORY/git/ref/heads/$branch" \
+            --jq '.object.sha')
+          if [[ "$head" != "$RELEASE_REVISION" ]]; then
+            echo "::error::Release branch $branch moved from $RELEASE_REVISION to $head."
+            exit 1
+          fi
+           if ! REQUIRE_CI_PENDING_ABSENT="true" \
+             REQUIRE_CI_READY_ATTESTATION="true" \
+             PUBLISH_ATTESTATION_SECRET="$(<"$ATTESTATION_SECRET_FILE")" \
+             node .__publish__/src/publish/validate-approval-attestation.js; then
+            echo "::error::Approval changed before Craft could publish."
+            exit 1
+          fi
+          head=$(gh api \
+            "repos/$RELEASE_REPOSITORY/git/ref/heads/$branch" \
+            --jq '.object.sha')
+          if [[ "$head" != "$RELEASE_REVISION" ]]; then
+            echo "::error::Release branch $branch moved from $RELEASE_REVISION to $head."
+            exit 1
+          fi
+           if ! REQUIRE_CI_PENDING_ABSENT="true" \
+             REQUIRE_CI_READY_ATTESTATION="true" \
+             PUBLISH_ATTESTATION_SECRET="$(<"$ATTESTATION_SECRET_FILE")" \
+             node .__publish__/src/publish/validate-approval-attestation.js; then
+            echo "::error::Approval changed before Craft could publish."
+            exit 1
+          fi
+          head=$(gh api \
+            "repos/$RELEASE_REPOSITORY/git/ref/heads/$branch" \
+            --jq '.object.sha')
+          if [[ "$head" != "$RELEASE_REVISION" ]]; then
+            echo "::error::Release branch $branch moved from $RELEASE_REVISION to $head."
+            exit 1
+          fi
+
+      - name: Reject failed pre-Craft validation
+        if: always() && steps.final-branch-validation.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --remove-label "accepted" \
+            --remove-label "ci-pending" \
+            --remove-label "ci-ready"
+          gh issue comment "${{ github.event.issue.number }}" \
+            -R "$GITHUB_REPOSITORY" \
+            --body "The release branch moved before publishing. Review the updated request and re-add the accepted label to retry." || true
+          exit 1
+
+      - name: Prepare final validation credentials
+        id: final-credentials
+        env:
+          APPROVAL_TOKEN: ${{ github.token }}
+          PUBLISH_ATTESTATION_SECRET: ${{ secrets.PUBLISH_ATTESTATION_SECRET }}
+          RELEASE_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          credential_directory="$GITHUB_WORKSPACE/.publish-credentials"
+          container_credential_directory="/github/workspace/.publish-credentials"
+          rm -rf "$credential_directory"
+          mkdir -p "$credential_directory"
+          approval_token_file="$credential_directory/approval-token"
+          attestation_secret_file="$credential_directory/attestation-secret"
+          release_token_file="$credential_directory/release-token"
+          printf '%s' "$APPROVAL_TOKEN" > "$approval_token_file"
+          printf '%s' "$PUBLISH_ATTESTATION_SECRET" > "$attestation_secret_file"
+          printf '%s' "$RELEASE_TOKEN" > "$release_token_file"
+          echo "approval_token_file=$container_credential_directory/approval-token" >> "$GITHUB_OUTPUT"
+          echo "attestation_secret_file=$container_credential_directory/attestation-secret" >> "$GITHUB_OUTPUT"
+          echo "release_token_file=$container_credential_directory/release-token" >> "$GITHUB_OUTPUT"
+
+      - uses: docker://getsentry/craft@sha256:9a4a5d5efa44a00c2215078ead39800d4aaa5a97908b94f45a64d7d506d6e14b
+        id: publish
         name: Publish using Craft
         with:
           entrypoint: /bin/bash
           args: >-
             -e
-            -c "
-            export HOME=/root &&
-            cd __repo__/${{ fromJSON(steps.location.outputs.result).path }} &&
-            exec craft publish ${{ fromJSON(steps.inputs.outputs.result).version }} --rev ${{ steps.release-revision.outputs.revision }}
-            "
+            -c "exec node /github/workspace/.__publish__/src/publish/publish-and-validate.js"
         env:
+          APPROVAL_ATTESTATION_AUTHOR: github-actions[bot]
+          APPROVAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          APPROVAL_ISSUE_REPOSITORY: ${{ github.repository }}
+          APPROVAL_ISSUE_TITLE: ${{ github.event.issue.title }}
+          APPROVAL_TOKEN_FILE: ${{ steps.final-credentials.outputs.approval_token_file }}
+          CRAFT_PUBLISH_PATH: ${{ fromJSON(steps.location.outputs.result).path }}
+          CRAFT_PUBLISH_VERSION: ${{ fromJSON(steps.inputs.outputs.result).version }}
+          EXPECTED_REQUEST_DIGEST: ${{ steps.request-digest.outputs.request_digest }}
+          PUBLISH_ATTESTATION_SECRET_FILE: ${{ steps.final-credentials.outputs.attestation_secret_file }}
+          RELEASE_REPOSITORY: getsentry/${{ fromJSON(steps.inputs.outputs.result).repo }}
+          RELEASE_REVISION: ${{ steps.release-revision.outputs.revision }}
+          RELEASE_TOKEN_FILE: ${{ steps.final-credentials.outputs.release_token_file }}
+          HOME: /root
           # Pin Craft's publish-state directory to a path outside
           # __repo__/ so repo contents cannot pre-populate it. See the
           # `Set targets` step above.
@@ -288,31 +684,100 @@ jobs:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
+      - name: Remove final validation credentials
+        id: remove-final-credentials
+        if: always()
+        run: |
+          set -euo pipefail
+          credential_directory="$GITHUB_WORKSPACE/.publish-credentials"
+          secret_file="$RUNNER_TEMP/publish-attestation-secret"
+          if ! rm -rf "$credential_directory" "$secret_file"; then
+            echo "::error::Could not remove final validation credentials."
+            exit 1
+          fi
+          if [[ -e "$credential_directory" || -L "$credential_directory" || -e "$secret_file" || -L "$secret_file" ]]; then
+            echo "::error::Final validation credentials remain on disk."
+            exit 1
+          fi
+
+      # This step uses only the runner's built-in gh client and event context,
+      # so setup, dependency, parsing, checkout, and Craft failures cannot
+      # prevent authorization cleanup.
+      - name: Reconcile publish issue
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${{ steps.publish.outcome }}" == "success" \
+            && "${{ steps.remove-final-credentials.outcome }}" == "success" ]]; then
+            gh issue edit "${{ github.event.issue.number }}" \
+              -R "$GITHUB_REPOSITORY" \
+              --remove-label "accepted" \
+              --remove-label "ci-pending" \
+              --remove-label "ci-ready" \
+              --state closed
+          else
+            gh issue edit "${{ github.event.issue.number }}" \
+              -R "$GITHUB_REPOSITORY" \
+              --remove-label "accepted" \
+              --remove-label "ci-pending" \
+              --remove-label "ci-ready"
+          fi
+
       - name: Update completed targets and remove label
-        if: ${{ cancelled() || failure() }}
+        if: always() && steps.publish.outcome != 'success'
+        continue-on-error: true
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
           CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.state_file }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/update-issue.js
 
-      - name: Inform about cancellation
-        if: ${{ cancelled() }}
+      - name: Report publish result
+        if: always()
+        continue-on-error: true
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node .__publish__/src/publish/post-result.js cancelled
+        run: |
+          if [[ "${{ steps.remove-final-credentials.outcome }}" != "success" ]]; then
+            status=failure
+          else
+            case "${{ steps.publish.outcome }}" in
+              success) status=success ;;
+              cancelled) status=cancelled ;;
+              *) status=failure ;;
+            esac
+          fi
+          node .__publish__/src/publish/post-result.js "$status"
 
-      - name: Inform about failure
-        if: ${{ failure() }}
+      # Retry the invariant after optional target updates, comments, and
+      # telemetry. This step is authoritative: if it fails, the job fails.
+      - name: Verify publish issue reconciliation
+        if: always()
         env:
-          PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node .__publish__/src/publish/post-result.js failure
-
-      - name: Close on success
-        if: ${{ success() }}
-        env:
-          PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node .__publish__/src/publish/post-result.js success
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3; do
+            if [[ "${{ steps.publish.outcome }}" == "success" \
+              && "${{ steps.remove-final-credentials.outcome }}" == "success" ]]; then
+              if gh issue edit "${{ github.event.issue.number }}" \
+                -R "$GITHUB_REPOSITORY" \
+                --remove-label "accepted" \
+                --remove-label "ci-pending" \
+                --remove-label "ci-ready" \
+                --state closed; then
+                exit 0
+              fi
+            elif gh issue edit "${{ github.event.issue.number }}" \
+              -R "$GITHUB_REPOSITORY" \
+              --remove-label "accepted" \
+              --remove-label "ci-pending" \
+              --remove-label "ci-ready"; then
+              exit 0
+            fi
+            echo "::warning::Publish issue reconciliation attempt ${attempt} failed."
+          done
+          echo "::error::Could not reconcile publish issue authorization."
+          exit 1

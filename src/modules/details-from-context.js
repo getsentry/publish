@@ -24,6 +24,25 @@ const TARGETS_PARSER_REGEX = /^\s*- \[[ x]\] (\S+)/gim;
  */
 const CHECKED_TARGETS_PARSER_REGEX = /^\s*- \[x\] (\S+)/gim;
 
+function parsePublishTitle(title) {
+  try {
+    const titleDetails = parsePublishIssueTitle(title);
+    const path = "." + titleDetails.path;
+
+    if (
+      !isPublishRepository(titleDetails.repo) ||
+      !isReleaseVersion(titleDetails.version) ||
+      !isPublishPath(path)
+    ) {
+      return null;
+    }
+
+    return titleDetails;
+  } catch {
+    return null;
+  }
+}
+
 async function detailsFromContext({ context }) {
   if (!context || !context.payload || !context.payload.issue) {
     throw new Error("Issue context is not defined");
@@ -80,4 +99,5 @@ module.exports = {
   TARGETS_SECTION_PARSER_REGEX,
   TARGETS_PARSER_REGEX,
   CHECKED_TARGETS_PARSER_REGEX,
+  parsePublishTitle,
 };

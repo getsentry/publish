@@ -6,6 +6,9 @@ const core = require("@actions/core");
 
 const { resolvePublishLocation } = require("../modules/publish-location");
 
+const CRAFT_IMAGE =
+  "getsentry/craft@sha256:9a4a5d5efa44a00c2215078ead39800d4aaa5a97908b94f45a64d7d506d6e14b";
+
 function getWorkspaceNames({
   repositoryDirectory,
   exists = existsSync,
@@ -24,7 +27,7 @@ function getWorkspaceNames({
       `${path.resolve(repositoryDirectory)}:/github/workspace/__repo__`,
       "--workdir",
       "/github/workspace/__repo__",
-      "getsentry/craft:latest",
+      CRAFT_IMAGE,
       "workspace",
       "list",
     ],
@@ -34,23 +37,26 @@ function getWorkspaceNames({
   try {
     workspaceNames = JSON.parse(output);
   } catch {
-    throw new Error("Craft workspace discovery returned an invalid workspace list.");
+    throw new Error(
+      "Craft workspace discovery returned an invalid workspace list."
+    );
   }
   if (!Array.isArray(workspaceNames)) {
-    throw new Error("Craft workspace discovery returned an invalid workspace list.");
+    throw new Error(
+      "Craft workspace discovery returned an invalid workspace list."
+    );
   }
   return workspaceNames;
 }
 
-function discoverLocation({
-  input,
-  repositoryDirectory,
-  exists,
-  execFile,
-}) {
+function discoverLocation({ input, repositoryDirectory, exists, execFile }) {
   return resolvePublishLocation({
     path: input.path,
-    workspaceNames: getWorkspaceNames({ repositoryDirectory, exists, execFile }),
+    workspaceNames: getWorkspaceNames({
+      repositoryDirectory,
+      exists,
+      execFile,
+    }),
   });
 }
 
@@ -65,7 +71,8 @@ function main() {
     JSON.stringify(
       discoverLocation({
         input,
-        repositoryDirectory: process.env.PUBLISH_REPOSITORY_DIRECTORY || "__repo__",
+        repositoryDirectory:
+          process.env.PUBLISH_REPOSITORY_DIRECTORY || "__repo__",
       })
     )
   );

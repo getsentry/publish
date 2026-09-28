@@ -1,4 +1,4 @@
-async function postWorkflowDetails({context, octokit}) {
+async function postWorkflowDetails({ context, octokit }) {
   const { repo: publishRepo, runId: run_id } = context;
   const { number: issue_number } = context.payload.issue;
 

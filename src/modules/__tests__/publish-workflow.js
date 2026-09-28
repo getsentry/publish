@@ -19,7 +19,7 @@ function getWorkflow() {
 function getSetTargetsScript() {
   const workflow = getWorkflow();
   const section = workflow.match(
-    / {6}- name: Set targets[\s\S]*? {8}run: \|\n(?<script>[\s\S]*?)\n {6}- uses: docker:\/\/getsentry\/craft:latest/
+    / {6}- name: Set targets[\s\S]*? {8}run: \|\n(?<script>[\s\S]*?)\n {6}- name: Revalidate release branch head/
   );
   if (!section?.groups?.script) {
     throw new Error("Missing Set targets workflow script");
@@ -80,12 +80,18 @@ test("uses the CI-approved revision for checkout, location resolution, and publi
   expect(workflow).toContain(
     "ref: ${{ steps.release-revision.outputs.revision }}"
   );
-  expect(workflow.match(/actions\/checkout@v7/g)).toHaveLength(2);
+  expect(
+    workflow.match(
+      /actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/g
+    )
+  ).toHaveLength(2);
   expect(workflow).toContain(
     "node .__publish__/src/publish/discover-location.js"
   );
   expect(workflow).toContain("PUBLISH_REPOSITORY_DIRECTORY: __repo__");
-  expect(workflow).not.toContain("getsentry/craft:2.31.0");
+  expect(workflow).toContain(
+    "docker://getsentry/craft@sha256:9a4a5d5efa44a00c2215078ead39800d4aaa5a97908b94f45a64d7d506d6e14b"
+  );
   expect(workflow).toContain(
     "CRAFT_PUBLISH_PATH: ${{ fromJSON(steps.location.outputs.result).path }}"
   );
@@ -93,7 +99,7 @@ test("uses the CI-approved revision for checkout, location resolution, and publi
     "CRAFT_PUBLISH_WORKSPACE: ${{ fromJSON(steps.location.outputs.result).workspace || '' }}"
   );
   expect(workflow).toContain(
-    "craft publish ${{ fromJSON(steps.inputs.outputs.result).version }} --rev ${{ steps.release-revision.outputs.revision }}"
+    "node /github/workspace/.__publish__/src/publish/publish-and-validate.js"
   );
 });
 
@@ -101,10 +107,16 @@ test("publishes only on a fresh CI-ready label event", () => {
   const workflow = getWorkflow();
 
   expect(workflow).toContain("github.event.label.name == 'ci-ready'");
-  expect(workflow).toContain("contains(github.event.issue.labels.*.name, 'accepted')");
-  expect(workflow).toContain("contains(github.event.issue.labels.*.name, 'ci-ready')");
-  expect(workflow).toContain("!contains(github.event.issue.labels.*.name, 'ci-pending')");
-  expect(workflow).toContain("!contains(github.event.issue.labels.*.name, 'ci-failed')");
+  expect(workflow).toContain(
+    "contains(github.event.issue.labels.*.name, 'accepted')"
+  );
+  expect(workflow).toContain(
+    "contains(github.event.issue.labels.*.name, 'ci-ready')"
+  );
+  expect(workflow).toContain('REQUIRE_CI_PENDING_ABSENT: "true"');
+  expect(workflow).toContain(
+    "!contains(github.event.issue.labels.*.name, 'ci-failed')"
+  );
 });
 
 test("uses Craft's legacy root state filename", () => {

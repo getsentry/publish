@@ -8,7 +8,7 @@ describe("getGitHubToken", () => {
   test("throw if no token is defined", async () => {
     delete process.env.GITHUB_TOKEN;
     expect(() => getGitHubToken()).toThrow(
-      'No "GITHUB_TOKEN" environment variable found.',
+      'No "GITHUB_TOKEN" environment variable found.'
     );
   });
 

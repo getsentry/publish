@@ -9,6 +9,7 @@ process.stdout.write(
   JSON.stringify(
     getCiPollerInput({
       issueBody,
+      labels: JSON.parse(process.env.PUBLISH_ISSUE_LABELS || ""),
       title: process.env.PUBLISH_TITLE || "",
       revision: process.env.PUBLISH_REVISION || "",
     })

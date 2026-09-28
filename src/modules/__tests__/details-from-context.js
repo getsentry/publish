@@ -1,6 +1,9 @@
 import { test, expect } from "vitest";
 
-const { detailsFromContext } = require("../details-from-context.js");
+const {
+  detailsFromContext,
+  parsePublishTitle,
+} = require("../details-from-context.js");
 
 const inputsArgs = {
   context: {
@@ -66,6 +69,23 @@ Quick links:
     },
   });
   expect(result.version).toEqual("4.2.6+sentry1");
+});
+
+test("parses qualified and legacy publish titles", () => {
+  expect(
+    parsePublishTitle(
+      "publish: getsentry/sentry-javascript/packages/core@10.0.0"
+    )
+  ).toEqual({
+    path: "/packages/core",
+    repo: "sentry-javascript",
+    version: "10.0.0",
+  });
+  expect(parsePublishTitle("publish: sentry-javascript@10.0.0")).toEqual({
+    path: "",
+    repo: "sentry-javascript",
+    version: "10.0.0",
+  });
 });
 
 const defaultTargetInputsArgs = {

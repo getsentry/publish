@@ -43,7 +43,9 @@ test("accepts a check-runs URL without a trailing slash", () => {
   expect(
     getReleaseRevision({
       repo: "toolkit",
-      issueBody: requestBody(canonicalQuickLinks().replace("/checks/)", "/checks)")),
+      issueBody: requestBody(
+        canonicalQuickLinks().replace("/checks/)", "/checks)")
+      ),
     })
   ).toBe(REVISION);
 });

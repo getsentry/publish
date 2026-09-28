@@ -3,35 +3,125 @@ name: CI Status Poller
 on:
   schedule:
     - cron: "*/5 * * * *"
-  workflow_dispatch:
-    inputs:
-      attempt:
-        description: Self-dispatch attempt counter (internal use)
-        required: false
-        default: "0"
+  repository_dispatch:
+    types: [ci-poller]
+  workflow_run:
+    workflows: [Run CI Status Poller]
+    types: [completed]
+  issues:
+    types: [closed, reopened]
 
 permissions:
+  actions: read
   contents: read
-  issues: read
+  issues: write
 
 jobs:
   check-ci:
     runs-on: ubuntu-latest
     environment: production
-    # Skip entirely (no runner provisioned) when there's nothing to check.
-    # Set to "true" by ci-pending.yml, reset to "false" here when done.
-    # Always allow workflow_dispatch for manual recovery.
-    if: vars.CI_POLLER_HAS_PENDING == 'true' || github.event_name == 'workflow_dispatch'
+    # Skip when there is no pending work except on the scheduled recovery path.
+    # The schedule always scans authorization labels so a failed auto-approval
+    # cleanup or stale CI_POLLER_HAS_PENDING value cannot strand a release.
+    if: >-
+      vars.CI_POLLER_HAS_PENDING == 'true'
+      || github.event_name == 'repository_dispatch'
+      || github.event_name == 'issues'
+      || github.event_name == 'schedule'
+       || (
+       github.event_name == 'workflow_run'
+       && github.event.workflow_run.conclusion == 'success'
+       && github.event.workflow_run.event == 'workflow_dispatch'
+       && github.event.workflow_run.head_branch == github.event.repository.default_branch
+       && github.event.workflow_run.head_repository.full_name == github.repository
+       )
     concurrency:
       group: ci-status-poller
       cancel-in-progress: false
     steps:
+      - name: Validate dispatch attempt
+        id: dispatch-attempt
+        if: github.event_name == 'repository_dispatch'
+        env:
+          ATTEMPT: ${{ github.event.client_payload.attempt || '0' }}
+        run: |
+          if ! [[ "$ATTEMPT" =~ ^(0|[1-9]|[1-5][0-9])$ ]]; then
+            echo "::error::repository_dispatch attempt must be an integer from 0 through 59"
+            exit 1
+           fi
+           echo "value=$ATTEMPT" >> "$GITHUB_OUTPUT"
+
+      - name: Validate manual recovery provenance
+        id: validate-manual-recovery
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          default_head=$(gh api \
+            "repos/$GITHUB_REPOSITORY/git/ref/heads/$DEFAULT_BRANCH" \
+            --jq '.object.sha')
+          if ! [[ "$default_head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve an immutable default-branch commit."
+            exit 1
+          fi
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            if ! [[ "$WORKFLOW_RUN_ID" =~ ^[0-9]+$ ]]; then
+              echo "::error::Invalid manual recovery workflow run ID."
+              exit 1
+            fi
+            workflow_run=$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/${WORKFLOW_RUN_ID}")
+            dispatch_workflow_id=$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/ci-poller-dispatch.yml" \
+              --jq '.id')
+            if ! [[ "$dispatch_workflow_id" =~ ^[0-9]+$ ]]; then
+              echo "::error::Could not resolve the manual recovery workflow identity."
+              exit 1
+            fi
+            if ! printf '%s' "$workflow_run" | jq -e \
+              --arg repository "$GITHUB_REPOSITORY" \
+              --arg branch "$DEFAULT_BRANCH" \
+              --arg head "$default_head" \
+              --argjson workflow_id "$dispatch_workflow_id" \
+              '(
+                .event == "workflow_dispatch"
+                and .conclusion == "success"
+                and .workflow_id == $workflow_id
+                and .head_repository.full_name == $repository
+                and .head_branch == $branch
+                and .head_sha == $head
+              )'; then
+              echo "::error::Manual recovery workflow provenance is invalid."
+              exit 1
+            fi
+          fi
+          echo "default_head=$default_head" >> "$GITHUB_OUTPUT"
+
+      - name: Get publish code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          # Every trigger resolves and checks out an immutable default-branch SHA.
+          ref: ${{ steps.validate-manual-recovery.outputs.default_head }}
+          path: .__publish__
+          persist-credentials: false
+
+      - name: Prepare attestation secret
+        env:
+          PUBLISH_ATTESTATION_SECRET: ${{ secrets.PUBLISH_ATTESTATION_SECRET }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$PUBLISH_ATTESTATION_SECRET" > "$RUNNER_TEMP/publish-attestation-secret"
+
       # sentry-internal-app token for label changes on this repo.
       # This token is what triggers publish.yml downstream — see
       # https://github.com/getsentry/publish for why GITHUB_TOKEN can't.
       - name: Get auth token
         id: token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
@@ -42,16 +132,11 @@ jobs:
       # sentry-playstation, sentry-switch, service-registry, etc.
       - name: Get release bot auth token
         id: release-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
           owner: getsentry # create token with access to all getsentry repos
-
-      - name: Check out publish controller
-        uses: actions/checkout@v7
-        with:
-          path: .__publish__
 
       - name: Check CI status for ci-pending issues
         env:
@@ -60,7 +145,14 @@ jobs:
           # token for cross-repo API calls (installed on all getsentry repos).
           GH_TOKEN: ${{ steps.token.outputs.token }}
           RELEASE_TOKEN: ${{ steps.release-token.outputs.token }}
+          WORKFLOW_TOKEN: ${{ github.token }}
+          ATTESTATION_SECRET_FILE: ${{ runner.temp }}/publish-attestation-secret
         run: |
+          set -euo pipefail
+          if [[ ! -s "$ATTESTATION_SECRET_FILE" ]]; then
+            echo "::error::The attestation secret file is missing or empty."
+            exit 1
+          fi
           # Helper: gh api using release-bot token (for cross-repo calls).
           # Uses a subshell so GH_TOKEN override doesn't leak to other calls.
           # Captures stdout and exits non-zero on API failure (including 404s)
@@ -75,71 +167,212 @@ jobs:
             fi
             printf '%s' "$output"
           }
-          # Only check issues that have BOTH ci-pending AND accepted labels.
-          # This avoids polling for abandoned releases that nobody approved.
-          issues=$(gh issue list -R "$GITHUB_REPOSITORY" \
-            --state open \
-            --label ci-pending \
-            --label accepted \
-            --limit 200 \
-            --json number,title,labels,body)
+
+          get_authorization_issues() {
+            local records
+            if ! records=$(gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/issues?state=all&per_page=100" \
+              --jq '.[] | select(.pull_request == null and any(.labels[]; .name == "accepted" or .name == "ci-pending" or .name == "ci-ready")) | {body,labels,number,state,title}'); then
+              return 1
+            fi
+            if [[ -z "$records" ]]; then
+              printf '[]'
+              return 0
+            fi
+            printf '%s\n' "$records" | jq -s .
+          }
+
+          # Check every issue carrying release authorization. Cleanup can leave
+          # any one of these labels behind, so scanning only accepted issues
+          # would make a stale ci-ready or ci-pending state invisible.
+          if ! issues=$(get_authorization_issues); then
+            echo "::warning::Could not list authorized publish issues; leaving the poller enabled."
+            exit 1
+          fi
 
           count=$(echo "$issues" | jq length)
-          if [[ "$count" == "0" ]]; then
-            echo "No ci-pending + accepted issues found."
-            exit 0
-          fi
-          echo "Found ${count} ci-pending + accepted issue(s)."
+            if [[ "$count" == "0" ]]; then
+              echo "No publish issues with authorization labels found."
+              exit 0
+            fi
+            echo "Found ${count} issue(s) with authorization labels."
 
           # Check each issue's CI status
           echo "$issues" | jq -c '.[]' | while read -r issue; do
             (
             number=$(echo "$issue" | jq -r '.number')
+            state=$(echo "$issue" | jq -r '.state')
             title=$(echo "$issue" | jq -r '.title')
+            labels=$(echo "$issue" | jq -c '.labels')
+            has_accepted=$(echo "$labels" | jq -r 'any(.[]; .name == "accepted")')
+            has_ci_pending=$(echo "$labels" | jq -r 'any(.[]; .name == "ci-pending")')
+            has_ci_ready=$(echo "$labels" | jq -r 'any(.[]; .name == "ci-ready")')
+
+            if [[ "$state" != "open" ]]; then
+              echo "Issue #${number} is closed. Removing release authorization."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "accepted" \
+                --remove-label "ci-pending" \
+                --remove-label "ci-ready"
+              exit 0
+            fi
+
+            if [[ "$has_accepted" != "true" ]]; then
+              echo "Issue #${number} has stale non-accepted authorization labels. Removing them."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "accepted" \
+                --remove-label "ci-pending" \
+                --remove-label "ci-ready"
+              exit 0
+            fi
+
+            # A ci-ready issue is already being handled by publish.yml. Do
+            # not start another poll cycle while that workflow is active. If
+            # no run remains, recover the stale authorization because a failed
+            # terminal cleanup cannot emit another ci-ready event.
+            if [[ "$has_ci_ready" == "true" && "$has_ci_pending" != "true" ]]; then
+              if ! publish_runs=$(GH_TOKEN="$WORKFLOW_TOKEN" gh api --paginate \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/publish.yml/runs?event=issues&per_page=100" \
+                --jq '.workflow_runs[] | {display_title: .display_title, status: .status}'); then
+                echo "::warning::Could not inspect publish runs for issue #${number}; leaving authorization for retry."
+                exit 0
+              fi
+              publish_active=$(printf '%s\n' "$publish_runs" | jq -s \
+                --arg run_name "Publish issue #${number}: ${title}" \
+                'any(.[]; .display_title == $run_name and .status != "completed")')
+              if [[ "$publish_active" == "true" ]]; then
+                echo "Issue #${number} is already ci-ready and has an active publish run."
+                exit 0
+              fi
+              echo "Issue #${number} has stale ci-ready state with no active publish run. Revoking approval."
+              if ! gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "accepted" \
+                --remove-label "ci-pending" \
+                --remove-label "ci-ready"; then
+                echo "::warning::Could not revoke stale authorization for issue #${number}."
+                exit 0
+              fi
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                --body "The previous publish run ended without clearing its authorization. Re-add the accepted label to retry." || true
+              exit 0
+            fi
+
+            # Restore the state that the poller owns before checking CI. This
+            # recovers an accepted issue when waiting-for-ci or publish cleanup
+            # lost ci-pending after its last successful event.
+            if [[ "$has_ci_pending" != "true" ]]; then
+              echo "Restoring ci-pending for accepted issue #${number}."
+              if ! gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-failed" \
+                --add-label "ci-pending"; then
+                echo "::warning::Could not restore ci-pending for issue #${number}. Revoking approval."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-pending" \
+                  --remove-label "ci-ready"
+                exit 0
+              fi
+            fi
             body_file=$(mktemp)
             resolver_output_file=""
             updated_body_file=""
             trap 'for file in "${body_file:-}" "${resolver_output_file:-}" "${updated_body_file:-}"; do [[ -z "$file" ]] || rm -f "$file"; done' EXIT
             printf '%s' "$issue" | jq -jr '.body' > "$body_file"
 
-            if ! publish_input=$(PUBLISH_ISSUE_BODY_FILE="$body_file" PUBLISH_TITLE="$title" \
+            if ! publish_input=$(PUBLISH_ISSUE_BODY_FILE="$body_file" PUBLISH_ISSUE_LABELS="$labels" PUBLISH_TITLE="$title" \
               node .__publish__/src/publish/resolve-ci-poller-input.js); then
-              echo "::warning::Could not parse canonical publish input for issue #${number}, skipping."
+              echo "::warning::Could not parse canonical publish input for issue #${number}. Removing accepted."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --remove-label "accepted" \
+                --remove-label "ci-ready"
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                --body "The publish request is invalid and could not be checked. Fix the request and re-add the accepted label to retry."
               exit 0
             fi
             repo=$(echo "$publish_input" | jq -r '.repo')
+            request_digest=$(echo "$publish_input" | jq -r '.requestDigest')
             version=$(echo "$publish_input" | jq -r '.version')
             issue_sha=$(echo "$publish_input" | jq -r '.revision')
+
+            # Bind this poll cycle to the current accepted-label event before
+            # inspecting CI. Never move a release to ci-ready after it changes.
+            if ! accepted_event=$(APPROVAL_TOKEN="$GH_TOKEN" \
+              APPROVAL_ISSUE_NUMBER="$number" \
+              APPROVAL_ISSUE_REPOSITORY="$GITHUB_REPOSITORY" \
+              node .__publish__/src/publish/current-accepted-event.js); then
+              echo "::warning::Could not bind approval event for issue #${number}. Removing accepted."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --remove-label "accepted" \
+                --remove-label "ci-ready"
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                --body "Approval is invalid or could not be verified. Re-add the accepted label to retry after resolving the issue."
+              exit 0
+            fi
+            accepted_actor=$(echo "$accepted_event" | jq -r '.actor')
+            accepted_event_id=$(echo "$accepted_event" | jq -r '.eventId')
+
+            if ! APPROVAL_TOKEN="$GH_TOKEN" \
+              APPROVAL_ATTESTATION_AUTHOR="github-actions[bot]" \
+              APPROVAL_ISSUE_NUMBER="$number" \
+              APPROVAL_ISSUE_REPOSITORY="$GITHUB_REPOSITORY" \
+              APPROVAL_ISSUE_TITLE="$title" \
+              EXPECTED_ACCEPTED_ACTOR="$accepted_actor" \
+               EXPECTED_ACCEPTED_EVENT_ID="$accepted_event_id" \
+               EXPECTED_REQUEST_DIGEST="$request_digest" \
+               PUBLISH_ATTESTATION_SECRET="$(<"$ATTESTATION_SECRET_FILE")" \
+               node .__publish__/src/publish/validate-approval-attestation.js; then
+              echo "::warning::Approval for issue #${number} is invalid. Removing accepted."
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --remove-label "accepted" \
+                --remove-label "ci-ready"
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                --body "Approval is invalid or could not be verified. Re-add the accepted label to retry after resolving the issue."
+              exit 0
+            fi
 
             # Resolve the release branch name from the original commit's check
             # suites (avoids hard-coding "release/{version}" since repos can
             # customize branch names in their craft config).
-            # Failures are non-fatal — we fall back to the issue SHA below.
-            branch=""
-            if branch_result=$(gh_api_release "repos/${repo}/commits/${issue_sha}/check-suites" \
-              --jq '.check_suites[0].head_branch // empty'); then
-              branch="$branch_result"
+            check_suites=""
+            if ! check_suites=$(gh_api_release "repos/${repo}/commits/${issue_sha}/check-suites"); then
+              echo "  Could not resolve the release branch for ${repo}@${issue_sha:0:8}, skipping."
+              exit 0
             fi
 
-            if [[ -n "$branch" ]]; then
+            if ! branches=$(printf '%s' "$check_suites" | jq -r --arg revision "$issue_sha" \
+              '[.check_suites[]? | select(.head_sha == $revision) | .head_branch | select(type == "string" and length > 0)] | unique | .[]'); then
+              echo "  Could not decode release branch metadata for ${repo}@${issue_sha:0:8}, skipping."
+              exit 0
+            fi
+            if [[ -z "$branches" ]]; then
+              branch_count=0
+            elif ! branch_count=$(printf '%s\n' "$branches" | wc -l | tr -d ' '); then
+              echo "  Could not count release branches for ${repo}@${issue_sha:0:8}, skipping."
+              exit 0
+            fi
+
+            if [[ "$branch_count" == "1" ]]; then
+              branch="$branches"
               # Resolve the branch HEAD — may differ from issue_sha if a bot
               # (e.g., auto-fix, skill regeneration) pushed a new commit.
-              # Also non-fatal — falls back to issue SHA.
-              head_sha=""
-              if head_result=$(gh_api_release "repos/${repo}/git/ref/heads/${branch}" \
+              if ! sha=$(gh_api_release "repos/${repo}/git/ref/heads/${branch}" \
                 --jq '.object.sha'); then
-                head_sha="$head_result"
+                echo "  Could not resolve HEAD of ${branch}, skipping."
+                exit 0
               fi
-
-              if [[ -n "$head_sha" ]]; then
-                sha="$head_sha"
-              else
-                echo "  Could not resolve HEAD of ${branch}, using issue SHA."
-                sha="$issue_sha"
+              if [[ -z "$sha" ]]; then
+                echo "  Release branch ${branch} returned no HEAD, skipping."
+                exit 0
               fi
+            elif [[ "$branch_count" == "0" ]]; then
+              echo "  No release branch found for ${issue_sha:0:8}; waiting for CI metadata."
+              exit 0
             else
-              echo "  No check suites found for ${issue_sha:0:8}, using issue SHA."
-              sha="$issue_sha"
+              echo "  Multiple release branches found for ${issue_sha:0:8}; refusing to promote an ambiguous revision."
+              exit 0
             fi
 
             # If the branch moved (bot pushed a new commit), update the
@@ -149,17 +382,36 @@ jobs:
               echo "  Branch ${branch} moved: ${issue_sha:0:8} → ${sha:0:8}. Updating issue."
               resolver_output_file=$(mktemp)
               updated_body_file=$(mktemp)
-              if ! PUBLISH_ISSUE_BODY_FILE="$body_file" PUBLISH_REVISION="$sha" PUBLISH_TITLE="$title" \
+              if ! PUBLISH_ISSUE_BODY_FILE="$body_file" PUBLISH_ISSUE_LABELS="$labels" PUBLISH_REVISION="$sha" PUBLISH_TITLE="$title" \
                 node .__publish__/src/publish/resolve-ci-poller-input.js > "$resolver_output_file"; then
-                echo "::warning::Could not update canonical publish input for issue #${number}, skipping."
+                echo "::warning::Could not update canonical publish input for issue #${number}. Removing accepted."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "ci-pending" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-ready"
+                gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                  --body "The publish request could not be updated to the current release revision. Fix the request and re-add the accepted label to retry."
                 exit 0
               fi
               if ! jq -ejr 'if (.issueBody | type) == "string" and (.issueBody | length) > 0 then .issueBody else error("Expected nonempty issueBody string") end' \
                 "$resolver_output_file" > "$updated_body_file"; then
-                echo "::warning::Could not decode updated publish issue body for issue #${number}, skipping."
+                echo "::warning::Could not decode updated publish issue body for issue #${number}. Removing accepted."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "ci-pending" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-ready"
+                gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                  --body "The publish request could not be updated to the current release revision. Fix the request and re-add the accepted label to retry."
                 exit 0
               fi
               gh issue edit "$number" -R "$GITHUB_REPOSITORY" --body-file "$updated_body_file"
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending" \
+                --remove-label "accepted" \
+                --remove-label "ci-ready"
+              gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                --body "The release branch moved to ${sha:0:8}. Review the updated request and re-add the accepted label to retry."
+              exit 0
             fi
 
             echo "Checking CI for ${repo}@${version} commit ${sha:0:8} (issue #${number})..."
@@ -192,10 +444,10 @@ jobs:
 
             echo "  commit_status=${commit_status} (${total_statuses} statuses) pending=${pending_checks} unsuccessful=${unsuccessful_checks} total=${total_checks}"
 
-            # Require at least one check run or one commit status to exist —
-            # otherwise CI hasn't started yet and all counts would be 0.
-            if [[ "$total_checks" == "0" && "$total_statuses" == "0" ]]; then
-              echo "  No check runs or commit statuses found — CI may not have started yet."
+            # A successful legacy status alone is incomplete CI evidence. The
+            # poller must observe at least one check run before promotion.
+            if [[ "$total_checks" == "0" ]]; then
+              echo "  No check runs found — CI evidence is incomplete."
               exit 0
             fi
 
@@ -215,13 +467,183 @@ jobs:
             if [[ "$status_ok" == "true" \
                   && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
 
-              echo "  CI passed! Adding ci-ready label."
-              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
-                --remove-label "ci-pending" \
-                --add-label "ci-ready"
+              # CI checks can take hours. Revalidate after the final check so
+              # a renamed or re-approved issue never reaches ci-ready.
+              if ! APPROVAL_TOKEN="$GH_TOKEN" \
+                APPROVAL_ATTESTATION_AUTHOR="github-actions[bot]" \
+                APPROVAL_ISSUE_NUMBER="$number" \
+                APPROVAL_ISSUE_REPOSITORY="$GITHUB_REPOSITORY" \
+                APPROVAL_ISSUE_TITLE="$title" \
+                EXPECTED_ACCEPTED_ACTOR="$accepted_actor" \
+                 EXPECTED_ACCEPTED_EVENT_ID="$accepted_event_id" \
+                 EXPECTED_REQUEST_DIGEST="$request_digest" \
+                  PUBLISH_ATTESTATION_SECRET="$(<"$ATTESTATION_SECRET_FILE")" \
+                 node .__publish__/src/publish/validate-approval-attestation.js; then
+                echo "::warning::Approval for issue #${number} changed during CI. Removing accepted."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "ci-pending" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-ready"
+                gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                  --body "Approval is invalid or could not be verified. Re-add the accepted label to retry after resolving the issue."
+                exit 0
+              fi
 
-              # We only poll issues that have both ci-pending and accepted,
-              # so publishing will start as soon as ci-ready is added.
+              # Remove any stale ci-ready event before the final branch and
+              # approval fences, then always emit a fresh ci-ready event.
+              previous_ci_ready_event_id=""
+              if [[ "$has_ci_ready" == "true" ]]; then
+                if ! previous_ci_ready_event=$(APPROVAL_TOKEN="$GH_TOKEN" \
+                  APPROVAL_ISSUE_NUMBER="$number" \
+                  APPROVAL_ISSUE_REPOSITORY="$GITHUB_REPOSITORY" \
+                  node .__publish__/src/publish/current-ci-ready-event.js); then
+                  echo "::warning::Could not bind the previous ci-ready event for issue #${number}. Revoking approval."
+                  gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                    --remove-label "ci-pending" \
+                    --remove-label "accepted" \
+                    --remove-label "ci-ready"
+                  exit 0
+                fi
+                previous_ci_ready_event_id=$(echo "$previous_ci_ready_event" | jq -r '.eventId // empty')
+              fi
+              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-ready"
+
+              # A release branch can move while its checks are being read.
+              # Never promote the SHA that was checked if the branch no longer
+              # points at it when the CI-ready transition is about to happen.
+              if [[ -n "$branch" ]]; then
+                if ! latest_head=$(gh_api_release "repos/${repo}/git/ref/heads/${branch}" \
+                  --jq '.object.sha'); then
+                  echo "  Could not revalidate HEAD of ${branch}, skipping."
+                  exit 0
+                fi
+                if [[ -z "$latest_head" || "$latest_head" != "$sha" ]]; then
+                  echo "::warning::Release branch ${branch} moved during CI. Removing accepted."
+                  gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                    --remove-label "ci-pending" \
+                    --remove-label "accepted" \
+                    --remove-label "ci-ready"
+                  gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                    --body "The release branch moved while CI was being checked. Review the request and re-add the accepted label to retry."
+                  exit 0
+                fi
+              fi
+
+              # The proof was created from a live read. Check once more after
+              # recording it, removing stale ci-ready, and rereading the
+              # release branch head, immediately before moving forward.
+              if ! APPROVAL_TOKEN="$GH_TOKEN" \
+                APPROVAL_ATTESTATION_AUTHOR="github-actions[bot]" \
+                APPROVAL_ISSUE_NUMBER="$number" \
+                APPROVAL_ISSUE_REPOSITORY="$GITHUB_REPOSITORY" \
+                 APPROVAL_ISSUE_TITLE="$title" \
+                 EXPECTED_ACCEPTED_ACTOR="$accepted_actor" \
+                 EXPECTED_ACCEPTED_EVENT_ID="$accepted_event_id" \
+                 EXPECTED_REQUEST_DIGEST="$request_digest" \
+                  PUBLISH_ATTESTATION_SECRET="$(<"$ATTESTATION_SECRET_FILE")" \
+                node .__publish__/src/publish/validate-approval-attestation.js; then
+                echo "::warning::Approval for issue #${number} changed before ci-ready. Removing accepted."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "ci-pending" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-ready"
+                gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                  --body "Approval is invalid or could not be verified. Re-add the accepted label to retry after resolving the issue."
+                exit 0
+              fi
+
+              # Reread the branch after the last approval validation. Never
+              # promote a checked SHA after the branch moves in that window.
+              if [[ -n "$branch" ]]; then
+                if ! latest_head=$(gh_api_release "repos/${repo}/git/ref/heads/${branch}" \
+                  --jq '.object.sha'); then
+                  echo "::warning::Could not revalidate HEAD of ${branch} before ci-ready. Removing accepted."
+                  gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                    --remove-label "ci-pending" \
+                    --remove-label "accepted" \
+                    --remove-label "ci-ready"
+                  exit 0
+                fi
+                if [[ -z "$latest_head" || "$latest_head" != "$sha" ]]; then
+                  echo "::warning::Release branch ${branch} moved before ci-ready. Removing accepted."
+                  gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                    --remove-label "ci-pending" \
+                    --remove-label "accepted" \
+                    --remove-label "ci-ready"
+                  gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                    --body "The release branch moved before CI-ready could be added. Review the updated request and re-add the accepted label to retry."
+                  exit 0
+                fi
+              fi
+
+              echo "  CI passed! Adding ci-ready label."
+              if ! gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --add-label "ci-ready"; then
+                echo "::warning::Could not add ci-ready for issue #${number}. Revoking approval."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-pending" \
+                  --remove-label "ci-ready"
+                exit 0
+              fi
+
+              # ci-pending deliberately remains while the event-bound proof
+              # is recorded. Publish is triggered by ci-ready, but its live
+              # validation waits for ci-pending to be removed below.
+              attestation_output=$(mktemp)
+              if ! GITHUB_OUTPUT="$attestation_output" \
+                APPROVAL_TOKEN="$GH_TOKEN" \
+                APPROVAL_ISSUE_NUMBER="$number" \
+                APPROVAL_ISSUE_REPOSITORY="$GITHUB_REPOSITORY" \
+                 APPROVAL_ISSUE_TITLE="$title" \
+                 EXPECTED_ACCEPTED_ACTOR="$accepted_actor" \
+                 EXPECTED_ACCEPTED_EVENT_ID="$accepted_event_id" \
+                 EXPECTED_PREVIOUS_CI_READY_EVENT_ID="$previous_ci_ready_event_id" \
+                 EXPECTED_REQUEST_DIGEST="$request_digest" \
+                  PUBLISH_ATTESTATION_SECRET="$(<"$ATTESTATION_SECRET_FILE")" \
+                node .__publish__/src/publish/record-ci-ready-attestation.js; then
+                rm -f "$attestation_output"
+                echo "::warning::Approval changed before CI-ready proof could be recorded. Revoking approval."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "ci-pending" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-ready"
+                exit 0
+              fi
+              ci_ready_attestation="$(<"$attestation_output")"
+              rm -f "$attestation_output"
+
+              if [[ "$ci_ready_attestation" != ci_ready_attestation=* ]]; then
+                echo "::warning::Invalid CI-ready proof for issue #${number}. Revoking approval."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "ci-pending" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-ready"
+                exit 0
+              fi
+              ci_ready_attestation="${ci_ready_attestation#ci_ready_attestation=}"
+
+              if ! GH_TOKEN="${{ github.token }}" gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                --body "$ci_ready_attestation"; then
+                echo "::warning::Could not record CI-ready proof for issue #${number}. Revoking approval."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "ci-pending" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-ready"
+                exit 0
+              fi
+
+              if ! gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                --remove-label "ci-pending"; then
+                echo "::warning::Could not remove ci-pending after recording CI-ready proof. Revoking approval."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-pending" \
+                  --remove-label "ci-ready"
+                exit 0
+              fi
+
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
                 --body "CI checks passed for ${repo}@${version}. Publishing is starting now."
 
@@ -233,19 +655,21 @@ jobs:
               gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
                 --remove-label "ci-pending" \
                 --remove-label "accepted" \
+                --remove-label "ci-ready" \
                 --add-label "ci-failed"
 
               failed_names=$(echo "$all_checks" | jq -rs '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | .name] | join(", ")')
               comment_body="CI checks **failed** for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed checks: ${failed_names}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
 
-            elif [[ "$commit_status" == "failure" && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
-              # All check runs passed but commit statuses reported a failure.
-              echo "  CI failed (commit status)! Swapping ci-pending → ci-failed and removing accepted."
-              gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
-                --remove-label "ci-pending" \
-                --remove-label "accepted" \
-                --add-label "ci-failed"
+             elif [[ ("$commit_status" == "failure" || "$commit_status" == "error") && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
+               # All check runs passed but commit statuses reported a failure.
+               echo "  CI failed (commit status)! Swapping ci-pending → ci-failed and removing accepted."
+               gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                 --remove-label "ci-pending" \
+                 --remove-label "accepted" \
+                 --remove-label "ci-ready" \
+                 --add-label "ci-failed"
 
               failed_contexts=$(echo "$status_json" \
                 | jq -r '[.statuses[] | select(.state == "failure" or .state == "error")] | map(if .target_url and .target_url != "" and .target_url != "null" then "- [" + .context + "](" + .target_url + ") (" + .state + ")" else "- " + .context + " (" + .state + ")" end) | join("\n")')
@@ -255,46 +679,53 @@ jobs:
             )
           done
 
-      # Cleanup: check if we should disable the poller. Runs even if the
-      # CI check step above failed, so CI_POLLER_HAS_PENDING doesn't get
-      # stuck on "true" permanently.
-      - name: Check for remaining pending issues
+      # Cleanup: check if we should disable the poller. Keep it enabled for
+      # every issue with authorization labels, including stale ci-ready or
+      # ci-pending state that needs a later recovery attempt.
+      - name: Check for remaining authorization
         if: always()
+        continue-on-error: true
         id: remaining
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          count=$(gh issue list -R "$GITHUB_REPOSITORY" \
-            --state open \
-            --label ci-pending \
-            --label accepted \
-            --limit 1 \
-            --json number -q 'length')
+          if ! records=$(gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/issues?state=all&per_page=100" \
+            --jq '.[] | select(.pull_request == null and any(.labels[]; .name == "accepted" or .name == "ci-pending" or .name == "ci-ready")) | {labels}'); then
+            echo "::warning::Could not list authorized publish issues; keeping the poller enabled."
+            exit 1
+          fi
+          if [[ -n "$records" ]]; then
+            remaining=$(printf '%s\n' "$records" | jq -s .)
+          else
+            remaining='[]'
+          fi
+          count=$(echo "$remaining" | jq 'length')
           echo "count=${count}" >> "$GITHUB_OUTPUT"
 
       # Update the poller variable to match reality:
       # - Remaining issues → ensure variable is "true" (important when
-      #   workflow_dispatch bypassed the gate while variable was "false")
+      #   repository_dispatch bypassed the gate while variable was "false")
       # - No remaining issues → set to "false" to stop the cron
       # Placed after CI check so a token failure can't block CI checking.
       - name: Get poller app token
         if: always()
         id: poller-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ vars.CI_POLLER_APP_CLIENT_ID }}
           private-key: ${{ secrets.CI_POLLER_APP_PRIVATE_KEY }}
 
       - name: Sync poller variable with pending issue state
-        if: always() && steps.poller-token.outcome == 'success'
+        if: always() && steps.remaining.outcome == 'success' && steps.poller-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.poller-token.outputs.token }}
         run: |
           if [[ "${{ steps.remaining.outputs.count }}" == "0" ]]; then
-            echo "All ci-pending issues resolved. Disabling poller."
+            echo "All authorization labels resolved. Disabling poller."
             gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "false"
           else
-            echo "Still pending issues. Ensuring poller stays enabled."
+            echo "Authorization labels remain. Ensuring poller stays enabled."
             gh variable set CI_POLLER_HAS_PENDING -R "$GITHUB_REPOSITORY" -b "true"
           fi
 
@@ -304,7 +735,7 @@ jobs:
       # The concurrency group prevents accumulation (1 running + 1 queued).
       # Cap at 60 attempts (~30 min). If CI hasn't passed by then, the cron
       # fallback continues checking and the chain restarts on the next
-      # manual trigger (accepted label re-added or workflow_dispatch).
+      # manual trigger (accepted label re-added or workflow_dispatch relay).
       - name: Self-dispatch if issues remain pending
         if: >-
           always()
@@ -313,12 +744,28 @@ jobs:
           && steps.remaining.outputs.count != '0'
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
-          ATTEMPT: ${{ github.event.inputs.attempt || '0' }}
+          ATTEMPT: ${{ github.event_name == 'repository_dispatch' && steps.dispatch-attempt.outputs.value || '0' }}
         run: |
-          attempt=$((ATTEMPT + 1))
+          attempt=$((10#$ATTEMPT + 1))
           if [[ "$attempt" -ge 60 ]]; then
             echo "::warning::Max self-dispatch attempts (60) reached. Relying on cron fallback."
             exit 0
           fi
           echo "Re-dispatching (attempt ${attempt}/60)..."
-          gh workflow run ci-poller.yml -R "$GITHUB_REPOSITORY" -f attempt="${attempt}"
+           jq -n --arg attempt "$attempt" \
+             '{event_type: "ci-poller", client_payload: {attempt: $attempt}}' \
+             | gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input -
+
+      - name: Remove attestation secret
+        if: always()
+        run: |
+          set -euo pipefail
+          secret_file="$RUNNER_TEMP/publish-attestation-secret"
+          if ! rm -f "$secret_file"; then
+            echo "::error::Could not remove the attestation secret."
+            exit 1
+          fi
+          if [[ -e "$secret_file" || -L "$secret_file" ]]; then
+            echo "::error::The attestation secret remains on disk."
+            exit 1
+          fi

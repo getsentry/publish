@@ -8,8 +8,9 @@ const {
   isReleaseVersion,
 } = require("./publish-issue-validation");
 const { isPublishPath } = require("./publish-location");
+const { requestDigest } = require("./approval-attestation");
 
-function getCiPollerInput({ title, issueBody, revision }) {
+function getCiPollerInput({ title, issueBody, labels, revision }) {
   let parsedTitle;
   try {
     parsedTitle = parsePublishIssueTitle(title);
@@ -28,12 +29,14 @@ function getCiPollerInput({ title, issueBody, revision }) {
     throw new Error(`Invalid publish issue path: '${path}'`);
   }
   const currentRevision = getReleaseRevision({ issueBody, repo });
+  const resolvedIssueBody = revision
+    ? updateReleaseRevision({ issueBody, repo, revision })
+    : issueBody;
 
   return {
-    ...(revision
-      ? { issueBody: updateReleaseRevision({ issueBody, repo, revision }) }
-      : {}),
+    ...(revision ? { issueBody: resolvedIssueBody } : {}),
     repo: `getsentry/${repo}`,
+    requestDigest: requestDigest({ body: resolvedIssueBody, labels, title }),
     revision: currentRevision,
     version,
   };

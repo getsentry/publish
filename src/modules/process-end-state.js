@@ -1,15 +1,32 @@
 const Sentry = require("@sentry/node");
 
-async function processEndState({ context, octokit, inputs, status }) {
+async function processEndState({
+  context,
+  octokit,
+  inputs = {},
+  report = reportSession,
+  status,
+}) {
   const { repo, version } = inputs;
   const { repo: publishRepo, runId: run_id } = context;
   const { number: issue_number } = context.payload.issue;
-  const workflowInfo = (
-    await octokit.rest.actions.getWorkflowRun({
-      ...publishRepo,
-      run_id,
-    })
-  ).data;
+
+  // Validate the status before applying any terminal state transition.
+  sentryInfoFromDetails({ status, repo });
+
+  if (status === "success") {
+    try {
+      await octokit.rest.issues.update({
+        ...publishRepo,
+        issue_number,
+        state: "closed",
+      });
+    } catch (error) {
+      console.warn("Could not close the publish issue", error);
+    }
+  }
+
+  const workflowInfo = await getWorkflowInfo({ octokit, publishRepo, run_id });
 
   const details = {
     repo,
@@ -21,20 +38,30 @@ async function processEndState({ context, octokit, inputs, status }) {
     status,
   };
 
-  await postIssueComment({
-    octokit,
-    details,
-  });
-
-  if (status === "success") {
-    await octokit.rest.issues.update({
-      ...publishRepo,
-      issue_number,
-      state: "closed",
+  try {
+    await postIssueComment({
+      octokit,
+      details,
     });
+  } catch (error) {
+    console.warn("Could not post the publish result comment", error);
   }
 
-  await reportSession({ details, inputs });
+  await report({ details, inputs });
+}
+
+async function getWorkflowInfo({ octokit, publishRepo, run_id }) {
+  try {
+    return (
+      await octokit.rest.actions.getWorkflowRun({
+        ...publishRepo,
+        run_id,
+      })
+    ).data;
+  } catch (error) {
+    console.warn("Could not retrieve the publish workflow run", error);
+    return null;
+  }
 }
 
 async function postIssueComment({ octokit, details }) {
@@ -52,13 +79,13 @@ function githubIssueComment({ status, workflowInfo, version, repo, run_id }) {
       return `Failed to publish. ([run logs](${
         workflowInfo.html_url
       }?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
-        version,
+        version
       )}) and start over._`;
     case "cancelled":
       return `Publish workflow cancelled. ([run logs](${
         workflowInfo.html_url
       }?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
-        version,
+        version
       )}) and start over._`;
     case "success":
       return `Published successfully: [run#${run_id}](${workflowInfo.html_url})`;

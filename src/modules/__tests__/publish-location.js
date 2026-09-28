@@ -78,14 +78,11 @@ test.each([
   "packages/foo]",
   "packages/foo!",
   "packages/foo^",
-])(
-  "rejects unsafe workspace name %s",
-  (workspace) => {
-    expect(() =>
-      resolvePublishLocation({
-        path: "./packages/cli",
-        workspaceNames: [workspace],
-      })
-    ).toThrow("Craft workspace discovery returned an invalid workspace list.");
-  }
-);
+])("rejects unsafe workspace name %s", (workspace) => {
+  expect(() =>
+    resolvePublishLocation({
+      path: "./packages/cli",
+      workspaceNames: [workspace],
+    })
+  ).toThrow("Craft workspace discovery returned an invalid workspace list.");
+});

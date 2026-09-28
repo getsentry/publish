@@ -66,7 +66,7 @@ async function updateIssue({ context, octokit }) {
   const { repo: publishRepo } = context;
   const { number: issue_number } = context.payload.issue;
 
-  await Promise.all([
+  const [targetsResult, labelResult] = await Promise.allSettled([
     updateTargets({
       octokit,
       stateFilePath: process.env.CRAFT_STATE_FILE_PATH,
@@ -79,6 +79,13 @@ async function updateIssue({ context, octokit }) {
       name: "accepted",
     }),
   ]);
+
+  if (labelResult.status === "rejected" && labelResult.reason?.status !== 404) {
+    throw labelResult.reason;
+  }
+  if (targetsResult.status === "rejected") {
+    throw targetsResult.reason;
+  }
 }
 
 module.exports = { updateIssue, transformIssueBody };

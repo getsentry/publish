@@ -140,6 +140,104 @@ test("does not read a state file when target setup was skipped", async () => {
   expect(updateTargetsArgs.octokit.rest.issues.update).not.toHaveBeenCalled();
 });
 
+test("removes accepted without parsed publish inputs", async () => {
+  delete process.env.CRAFT_STATE_FILE_PATH;
+  mockExistsSync.mockClear();
+  const octokit = {
+    rest: {
+      issues: {
+        get: vi.fn(),
+        removeLabel: vi.fn(),
+        update: vi.fn(),
+      },
+    },
+  };
+
+  await updateIssue({
+    context: updateTargetsArgs.context,
+    octokit,
+  });
+
+  expect(mockExistsSync).not.toHaveBeenCalled();
+  expect(octokit.rest.issues.get).not.toHaveBeenCalled();
+  expect(octokit.rest.issues.update).not.toHaveBeenCalled();
+  expect(octokit.rest.issues.removeLabel).toHaveBeenCalledWith({
+    issue_number: "211",
+    name: "accepted",
+    owner: "getsentry",
+    repo: "publish",
+  });
+});
+
+test("restores targets when accepted was already removed", async () => {
+  process.env.CRAFT_STATE_FILE_PATH =
+    ".craft-state/craft/publish-state-getsentry-sentry-c232c383e26f-21.3.1.json";
+  mockExistsSync.mockReturnValue(true);
+  const octokit = {
+    rest: {
+      issues: {
+        get: vi.fn().mockResolvedValue({
+          data: { body: "### Targets\n- [ ] github\n" },
+        }),
+        removeLabel: vi
+          .fn()
+          .mockRejectedValue(
+            Object.assign(new Error("Not Found"), { status: 404 })
+          ),
+        update: vi.fn(),
+      },
+    },
+  };
+
+  await expect(
+    updateIssue({ context: updateTargetsArgs.context, octokit })
+  ).resolves.toBeUndefined();
+  expect(octokit.rest.issues.update).toHaveBeenCalledWith(
+    expect.objectContaining({
+      body: expect.stringContaining("- [x] github"),
+    })
+  );
+});
+
+test("surfaces target restoration failures when accepted was already removed", async () => {
+  process.env.CRAFT_STATE_FILE_PATH =
+    ".craft-state/craft/publish-state-getsentry-sentry-c232c383e26f-21.3.1.json";
+  mockExistsSync.mockReturnValue(true);
+  const octokit = {
+    rest: {
+      issues: {
+        get: vi.fn().mockResolvedValue({ data: { body: "### Targets\n" } }),
+        removeLabel: vi
+          .fn()
+          .mockRejectedValue(
+            Object.assign(new Error("Not Found"), { status: 404 })
+          ),
+        update: vi.fn().mockRejectedValue(new Error("target update failed")),
+      },
+    },
+  };
+
+  await expect(
+    updateIssue({ context: updateTargetsArgs.context, octokit })
+  ).rejects.toThrow("target update failed");
+});
+
+test("surfaces non-404 accepted-label removal failures", async () => {
+  process.env.CRAFT_STATE_FILE_PATH = "";
+  mockExistsSync.mockReturnValue(false);
+  const octokit = {
+    rest: {
+      issues: {
+        removeLabel: vi.fn().mockRejectedValue(new Error("permission denied")),
+      },
+    },
+  };
+
+  await expect(
+    updateIssue({ context: updateTargetsArgs.context, octokit })
+  ).rejects.toThrow("permission denied");
+});
+
 describe("transformIssueBody", () => {
   it("should correctly transform an issue body", () => {
     const result = transformIssueBody(

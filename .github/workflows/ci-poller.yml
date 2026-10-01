@@ -96,10 +96,13 @@ jobs:
             (
             number=$(echo "$issue" | jq -r '.number')
             title=$(echo "$issue" | jq -r '.title')
+            expected_security_labels=$(echo "$issue" | jq -c '[.labels[].name | select(. == "accepted" or . == "ci-pending" or . == "ci-ready" or . == "ci-failed" or . == "dry-run")] | sort')
             body_file=$(mktemp)
             resolver_output_file=""
             updated_body_file=""
-            trap 'for file in "${body_file:-}" "${resolver_output_file:-}" "${updated_body_file:-}"; do [[ -z "$file" ]] || rm -f "$file"; done' EXIT
+            live_issue_file=""
+            live_body_file=""
+            trap 'for file in "${body_file:-}" "${resolver_output_file:-}" "${updated_body_file:-}" "${live_issue_file:-}" "${live_body_file:-}"; do [[ -z "$file" ]] || rm -f "$file"; done' EXIT
             printf '%s' "$issue" | jq -jr '.body' > "$body_file"
 
             if ! publish_input=$(PUBLISH_ISSUE_BODY_FILE="$body_file" PUBLISH_TITLE="$title" \
@@ -108,6 +111,7 @@ jobs:
               exit 0
             fi
             repo=$(echo "$publish_input" | jq -r '.repo')
+            path=$(echo "$publish_input" | jq -r '.path')
             version=$(echo "$publish_input" | jq -r '.version')
             issue_sha=$(echo "$publish_input" | jq -r '.revision')
 
@@ -160,6 +164,7 @@ jobs:
                 exit 0
               fi
               gh issue edit "$number" -R "$GITHUB_REPOSITORY" --body-file "$updated_body_file"
+              cp "$updated_body_file" "$body_file"
             fi
 
             echo "Checking CI for ${repo}@${version} commit ${sha:0:8} (issue #${number})..."
@@ -214,6 +219,56 @@ jobs:
 
             if [[ "$status_ok" == "true" \
                   && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" ]]; then
+
+              # Verify live approval: the current accepted-label actor must
+              # still have target access.
+              if ! APPROVAL_ISSUE_NUMBER="$number" \
+                APPROVAL_ISSUE_REPOSITORY="$GITHUB_REPOSITORY" \
+                APPROVAL_TOKEN="$GH_TOKEN" \
+                REQUIRE_AUTHORIZED="true" \
+                TARGET_REPOSITORY="${repo#getsentry/}" \
+                TARGET_REPOSITORY_PATH="$path" \
+                TARGET_REPOSITORY_TOKEN="$RELEASE_TOKEN" \
+                node .__publish__/src/publish/authorize-approval.js; then
+                echo "  Approval is no longer authorized; revoking approval."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-pending"
+                gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                  --body "Approval is no longer valid for the target repository. Re-add the **accepted** label after resolving access."
+                exit 0
+              fi
+
+              # Verify live approval and request state immediately before the
+              # transition so no network lookup separates this fence from ci-ready.
+              live_issue_file=$(mktemp)
+              live_body_file=$(mktemp)
+              if ! gh issue view "$number" -R "$GITHUB_REPOSITORY" \
+                --json title,body,labels > "$live_issue_file"; then
+                echo "::warning::Could not retrieve live issue #${number}; revoking approval."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-pending"
+                exit 0
+              fi
+              live_title=$(jq -r '.title' "$live_issue_file")
+              jq -jr '.body' "$live_issue_file" > "$live_body_file"
+              has_accepted=$(jq '[.labels[].name == "accepted"] | any' "$live_issue_file")
+              has_ci_pending=$(jq '[.labels[].name == "ci-pending"] | any' "$live_issue_file")
+              live_security_labels=$(jq -c '[.labels[].name | select(. == "accepted" or . == "ci-pending" or . == "ci-ready" or . == "ci-failed" or . == "dry-run")] | sort' "$live_issue_file")
+              if [[ "$live_title" != "$title" \
+                    || "$has_accepted" != "true" \
+                    || "$has_ci_pending" != "true" \
+                    || "$live_security_labels" != "$expected_security_labels" ]] \
+                  || ! cmp -s "$body_file" "$live_body_file"; then
+                echo "  Publish request changed after approval; revoking approval."
+                gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
+                  --remove-label "accepted" \
+                  --remove-label "ci-pending"
+                gh issue comment "$number" -R "$GITHUB_REPOSITORY" \
+                  --body "The publish request changed after approval. Review it and re-add the **accepted** label to retry."
+                exit 0
+              fi
 
               echo "  CI passed! Adding ci-ready label."
               gh issue edit "$number" -R "$GITHUB_REPOSITORY" \

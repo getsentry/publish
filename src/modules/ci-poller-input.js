@@ -33,6 +33,7 @@ function getCiPollerInput({ title, issueBody, revision }) {
     ...(revision
       ? { issueBody: updateReleaseRevision({ issueBody, repo, revision }) }
       : {}),
+    path,
     repo: `getsentry/${repo}`,
     revision: currentRevision,
     version,

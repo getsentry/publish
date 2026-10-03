@@ -10,45 +10,45 @@ This is the **Sentry Publish Repository** - a GitHub Actions-based approval syst
 
 ### Package Manager
 
-- **Yarn 1.22.22** (classic) - Do NOT use npm
-- Version management via Volta (pinned in package.json)
+- **pnpm 12.8.1** (pinned in package.json) - Do NOT use yarn or npm
+- Node.js version management via Volta (pinned in package.json)
 
 ### Commands
 
 ```bash
 # Install dependencies
-yarn install
+pnpm install --frozen-lockfile
 
 # Run all tests
-yarn test
+pnpm test
 
 # Run tests in watch mode
-yarn test:watch
+pnpm test:watch
 
 # Run a single test file
-yarn test src/modules/__tests__/update-issue.js
+pnpm test src/modules/__tests__/update-issue.js
 
 # Run tests matching a pattern
-yarn test -t "pattern"
+pnpm test -t "pattern"
 
 # Lint code
-yarn lint
+pnpm lint
 
 # Format code with Prettier
-yarn prettier
+pnpm prettier
 ```
 
 ### Running Single Tests
 
 ```bash
 # By file path
-yarn test src/modules/__tests__/update-issue.js
+pnpm test src/modules/__tests__/update-issue.js
 
 # By test name pattern (matches describe/test names)
-yarn test -t "transformIssueBody"
+pnpm test -t "transformIssueBody"
 
 # Combine file and pattern
-yarn test src/modules/__tests__/update-issue.js -t "specific test name"
+pnpm test src/modules/__tests__/update-issue.js -t "specific test name"
 ```
 
 ## Project Structure
@@ -121,7 +121,7 @@ module.exports = functionName;
 - **Prettier** with default settings
 - Double quotes for strings
 - Semicolons required
-- Run `yarn prettier` before committing
+- Run `pnpm prettier` before committing
 
 ## Error Handling
 

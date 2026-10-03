@@ -37,14 +37,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: yarn
+          cache: pnpm
 
-      - name: Install yarn dependencies
-        run: yarn install --frozen-lockfile
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Parse target repository
         id: target
@@ -220,15 +223,20 @@ jobs:
         with:
           path: .__publish__
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: .__publish__/package.json
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: yarn
-          cache-dependency-path: .__publish__/yarn.lock
+          cache: pnpm
+          cache-dependency-path: .__publish__/pnpm-lock.yaml
 
-      - name: Install yarn dependencies
-        run: yarn install --cwd ".__publish__"
+      - name: Install pnpm dependencies
+        run: pnpm --dir .__publish__ install --frozen-lockfile
 
       - name: Parse and set inputs
         id: inputs

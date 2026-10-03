@@ -8,16 +8,13 @@
   "author": "Sentry Open Source <oss@sentry.io>",
   "license": "Apache-2.0",
   "volta": {
-    "node": "24.0.0",
-    "yarn": "1.22.22"
+    "node": "24.0.0"
   },
-  "resolutions": {
-    "undici": "^6.23.0"
-  },
+  "packageManager": "pnpm@12.8.1",
   "scripts": {
     "generate": "node scripts/generate-publish-issue-title-parser.js",
     "check:generated": "node scripts/generate-publish-issue-title-parser.js --check",
-    "test": "yarn check:generated && vitest run",
+    "test": "pnpm run check:generated && vitest run",
     "test:watch": "vitest",
     "lint": "eslint src .github --ignore-pattern '!.github'",
     "prettier": "prettier --write src"

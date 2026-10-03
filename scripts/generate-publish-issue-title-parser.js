@@ -29,18 +29,23 @@ function generateDocumentation({ documentation, titleGrammar }) {
   );
 
   if (
-    markers?.filter(marker => marker.includes("BEGIN")).length !== 1 ||
-    markers?.filter(marker => marker.includes("END")).length !== 1
+    markers?.filter((marker) => marker.includes("BEGIN")).length !== 1 ||
+    markers?.filter((marker) => marker.includes("END")).length !== 1
   ) {
-    throw new Error("Could not find the generated title grammar in the documentation.");
+    throw new Error(
+      "Could not find the generated title grammar in the documentation."
+    );
   }
 
-  const marker = /<!--\s*BEGIN\s+GENERATED\s+TITLE\s+GRAMMAR\s*-->\n[\s\S]*?<!--\s*END\s+GENERATED\s+TITLE\s+GRAMMAR\s*-->/.exec(
-    documentation
-  );
+  const marker =
+    /<!--\s*BEGIN\s+GENERATED\s+TITLE\s+GRAMMAR\s*-->\n[\s\S]*?<!--\s*END\s+GENERATED\s+TITLE\s+GRAMMAR\s*-->/.exec(
+      documentation
+    );
 
   if (!marker) {
-    throw new Error("Could not find the generated title grammar in the documentation.");
+    throw new Error(
+      "Could not find the generated title grammar in the documentation."
+    );
   }
 
   return documentation.replace(
@@ -83,12 +88,12 @@ function main() {
     const currentParser = fs.readFileSync(outputPath, "utf8");
     if (currentParser !== generatedParser) {
       throw new Error(
-        "The generated publish issue title parser is stale. Run `yarn generate`."
+        "The generated publish issue title parser is stale. Run `pnpm generate`."
       );
     }
     if (documentation !== generatedDocumentation) {
       throw new Error(
-        "The generated publish issue title documentation is stale. Run `yarn generate`."
+        "The generated publish issue title documentation is stale. Run `pnpm generate`."
       );
     }
   } else {

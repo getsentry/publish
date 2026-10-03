@@ -6,6 +6,9 @@ This is a meta/control repository that implements the [Central Publish Repositor
 
 [craft quick start](https://craft.sentry.dev/github-actions/)
 
+For local development, use Node.js 24 and pnpm 12.8.1. Run `pnpm install --frozen-lockfile`,
+then `pnpm test` and `pnpm lint`. CI installs dependencies from `pnpm-lock.yaml`.
+
 ## Release Flow
 
 ```mermaid

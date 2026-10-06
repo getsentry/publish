@@ -14,6 +14,9 @@ const AUTO_APPROVAL_TARGETS = new Set(
     .split(/\r?\n/)
     .filter(Boolean)
 );
+// Sentry-operated release bots that may approve publish requests for any
+// valid getsentry publish target. Any other bot is still rejected.
+const TRUSTED_APPROVER_BOTS = new Set(["sentry-junior[bot]"]);
 
 async function authorizeApproval({
   actor,
@@ -37,6 +40,13 @@ async function authorizeApproval({
     };
   }
 
+  if (TRUSTED_APPROVER_BOTS.has(actor)) {
+    return {
+      authorized: true,
+      repository: fullRepository,
+    };
+  }
+
   if (typeof actor !== "string" || /\[bot\]$/i.test(actor)) {
     return { authorized: false, repository: fullRepository };
   }
@@ -56,5 +66,6 @@ async function authorizeApproval({
 
 module.exports = {
   AUTO_APPROVAL_LABELER,
+  TRUSTED_APPROVER_BOTS,
   authorizeApproval,
 };

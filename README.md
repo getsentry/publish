@@ -98,6 +98,8 @@ approval process for such package as it might become an interesting target for a
 
 Automatic approvals are managed in the [`auto-approve.yml`](https://github.com/getsentry/publish/blob/main/.github/workflows/auto-approve.yml) workflow.
 
+Bot accounts cannot approve releases unless they are the auto-approval app or a trusted Sentry-operated release bot listed in [`approval-authorizer.js`](https://github.com/getsentry/publish/blob/main/src/modules/approval-authorizer.js), such as `sentry-junior[bot]`, which can approve releases for any publish target.
+
 ## Under the hood
 
 The system uses [Craft](https://github.com/getsentry/craft) under the hood to prepare and publish releases. It uses tokens from [Sentry Release Bot](https://github.com/apps/sentry-release-bot), which is a GitHub App that is installed on all repos in `getsentry` with read and write access to code, PRs, and actions. We utilize the [create-github-app-token](https://github.com/actions/create-github-app-token) to generate a short live token in every action run, with `SENTRY_RELEASE_BOT_CLIENT_ID` and `SENTRY_RELEASE_BOT_PRIVATE_KEY` defined at the organization level.

@@ -98,7 +98,7 @@ approval process for such package as it might become an interesting target for a
 
 Automatic approvals are managed in the [`auto-approve.yml`](https://github.com/getsentry/publish/blob/main/.github/workflows/auto-approve.yml) workflow.
 
-Bot accounts cannot approve releases unless they are the auto-approval app or a trusted Sentry-operated release bot scoped to specific repositories in [`approval-authorizer.js`](https://github.com/getsentry/publish/blob/main/src/modules/approval-authorizer.js). For example, `sentry-junior[bot]` can approve releases only for the repositories it manages, such as `getsentry/junior`.
+Bot accounts cannot approve releases unless they are the auto-approval app or a trusted Sentry-operated release bot listed in [`approval-authorizer.js`](https://github.com/getsentry/publish/blob/main/src/modules/approval-authorizer.js), such as `sentry-junior[bot]`, which can approve releases for any publish target.
 
 ## Under the hood
 

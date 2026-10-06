@@ -14,22 +14,9 @@ const AUTO_APPROVAL_TARGETS = new Set(
     .split(/\r?\n/)
     .filter(Boolean)
 );
-// Sentry-operated release bots that may approve publish requests for the
-// specific repositories they manage. Each bot is scoped to an explicit target
-// list; any other repository or bot is still rejected.
-const TRUSTED_APPROVER_BOTS = new Map([
-  [
-    "sentry-junior[bot]",
-    new Set([
-      "getsentry/junior",
-      "getsentry/scm-platform",
-      "getsentry/sentry-mcp",
-      "getsentry/sentry-starlight-theme",
-      "getsentry/vitest-evals",
-      "getsentry/warden",
-    ]),
-  ],
-]);
+// Sentry-operated release bots that may approve publish requests for any
+// valid getsentry publish target. Any other bot is still rejected.
+const TRUSTED_APPROVER_BOTS = new Set(["sentry-junior[bot]"]);
 
 async function authorizeApproval({
   actor,
@@ -55,7 +42,7 @@ async function authorizeApproval({
 
   if (TRUSTED_APPROVER_BOTS.has(actor)) {
     return {
-      authorized: TRUSTED_APPROVER_BOTS.get(actor).has(fullRepository),
+      authorized: true,
       repository: fullRepository,
     };
   }

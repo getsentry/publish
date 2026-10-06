@@ -161,10 +161,10 @@ describe("authorizeApproval", () => {
 
   test.each([
     ["junior", "."],
-    ["sentry-mcp", "."],
-    ["junior", "./packages/junior"],
+    ["sentry-javascript", "."],
+    ["objectstore", "./other"],
   ])(
-    "allows sentry-junior[bot] to approve its managed repository: %s%s",
+    "allows sentry-junior[bot] to approve any publish target: %s%s",
     async (repository, publishPath) => {
       const getPermission = vi.fn();
 
@@ -183,18 +183,19 @@ describe("authorizeApproval", () => {
     }
   );
 
-  test("rejects sentry-junior[bot] approval outside its managed repositories", async () => {
+  test("rejects sentry-junior[bot] approval for an invalid publish path", async () => {
     const getPermission = vi.fn();
 
     await expect(
       authorizeApproval({
         actor: "sentry-junior[bot]",
-        repository: "sentry-javascript",
+        publishPath: "../escape",
+        repository: "junior",
         getPermission,
       })
     ).resolves.toEqual({
       authorized: false,
-      repository: "getsentry/sentry-javascript",
+      repository: "getsentry/junior",
     });
     expect(getPermission).not.toHaveBeenCalled();
   });

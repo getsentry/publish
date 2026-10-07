@@ -71,6 +71,8 @@ jobs:
         continue-on-error: true
         env:
           APPROVAL_ACTOR: ${{ github.actor }}
+          APPROVAL_ACTOR_ID: ${{ github.event.sender.id }}
+          APPROVAL_ACTOR_TYPE: ${{ github.event.sender.type }}
           TARGET_REPOSITORY: ${{ fromJSON(steps.target.outputs.result).repo }}
           TARGET_REPOSITORY_PATH: ${{ fromJSON(steps.target.outputs.result).path }}
           TARGET_REPOSITORY_TOKEN: ${{ steps.target-token.outputs.token }}

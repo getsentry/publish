@@ -78,7 +78,13 @@ function currentAcceptedActor(events) {
       return null;
     }
     if (event.event === "labeled") {
-      return event.actor?.login || null;
+      return event.actor?.login
+        ? {
+            login: event.actor.login,
+            id: event.actor.id,
+            type: event.actor.type,
+          }
+        : null;
     }
     return actor;
   }, null);
@@ -103,13 +109,21 @@ async function main() {
     throw new Error('No "GITHUB_OUTPUT" environment variable found');
   }
 
-  const actor = process.env.APPROVAL_ACTOR || (await getCurrentAcceptedActor());
+  const actor = process.env.APPROVAL_ACTOR
+    ? {
+        login: process.env.APPROVAL_ACTOR,
+        id: process.env.APPROVAL_ACTOR_ID,
+        type: process.env.APPROVAL_ACTOR_TYPE,
+      }
+    : await getCurrentAcceptedActor();
   const publishPath = process.env.TARGET_REPOSITORY_PATH || "";
   if (!publishPath) {
     throw new Error("Invalid approval authorization input");
   }
   const { authorized } = await authorizeApproval({
-    actor,
+    actor: actor?.login,
+    actorId: actor?.id,
+    actorType: actor?.type,
     publishPath,
     repository: process.env.TARGET_REPOSITORY,
     getPermission,

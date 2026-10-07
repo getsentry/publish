@@ -30,6 +30,9 @@ describe("publish approval workflow", () => {
       "TARGET_REPOSITORY_TOKEN: ${{ steps.target-token.outputs.token }}"
     );
     expect(waitingForCi.slice(authorize, markPending)).toContain(
+      "APPROVAL_ACTOR_ID: ${{ github.event.sender.id }}"
+    );
+    expect(waitingForCi.slice(authorize, markPending)).toContain(
       "TARGET_REPOSITORY_PATH: ${{ fromJSON(steps.target.outputs.result).path }}"
     );
   });

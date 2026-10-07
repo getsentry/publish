@@ -140,37 +140,44 @@ describe("authorizeApproval", () => {
     expect(getPermission).not.toHaveBeenCalled();
   });
 
-  test.each(["github-actions[bot]", "unlisted-app[bot]"])(
-    "rejects direct approval by %s",
-    async (actor) => {
+  test.each([
+    "github-actions[bot]",
+    "unlisted-app[bot]",
+    "getsantry-app[bot]",
+    "Getsantry[bot]",
+  ])("rejects direct approval by %s", async (actor) => {
+    const getPermission = vi.fn();
+
+    await expect(
+      authorizeApproval({
+        actor,
+        repository: "sentry-javascript",
+        getPermission,
+      })
+    ).resolves.toEqual({
+      authorized: false,
+      repository: "getsentry/sentry-javascript",
+    });
+    expect(getPermission).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["sentry-junior[bot]", 264270552, "junior", "."],
+    ["sentry-junior[bot]", 264270552, "sentry-javascript", "."],
+    ["sentry-junior[bot]", 264270552, "objectstore", "./other"],
+    ["getsantry[bot]", 66042841, "sentry-protos", "."],
+    ["getsantry[bot]", 66042841, "arroyo", "."],
+    ["getsantry[bot]", 66042841, "objectstore", "./clients"],
+  ])(
+    "allows trusted %s (%i) to approve %s%s",
+    async (actor, actorId, repository, publishPath) => {
       const getPermission = vi.fn();
 
       await expect(
         authorizeApproval({
           actor,
-          repository: "sentry-javascript",
-          getPermission,
-        })
-      ).resolves.toEqual({
-        authorized: false,
-        repository: "getsentry/sentry-javascript",
-      });
-      expect(getPermission).not.toHaveBeenCalled();
-    }
-  );
-
-  test.each([
-    ["junior", "."],
-    ["sentry-javascript", "."],
-    ["objectstore", "./other"],
-  ])(
-    "allows sentry-junior[bot] to approve any publish target: %s%s",
-    async (repository, publishPath) => {
-      const getPermission = vi.fn();
-
-      await expect(
-        authorizeApproval({
-          actor: "sentry-junior[bot]",
+          actorId,
+          actorType: "Bot",
           publishPath,
           repository,
           getPermission,
@@ -183,22 +190,77 @@ describe("authorizeApproval", () => {
     }
   );
 
-  test("rejects sentry-junior[bot] approval for an invalid publish path", async () => {
-    const getPermission = vi.fn();
+  test.each([
+    ["sentry-javascript", "."],
+    ["objectstore", "."],
+    ["objectstore", "./other"],
+  ])(
+    "rejects getsantry[bot] outside the auto-approval list: %s%s",
+    async (repository, publishPath) => {
+      const getPermission = vi.fn();
 
-    await expect(
-      authorizeApproval({
-        actor: "sentry-junior[bot]",
-        publishPath: "../escape",
-        repository: "junior",
-        getPermission,
-      })
-    ).resolves.toEqual({
-      authorized: false,
-      repository: "getsentry/junior",
-    });
-    expect(getPermission).not.toHaveBeenCalled();
-  });
+      await expect(
+        authorizeApproval({
+          actor: "getsantry[bot]",
+          actorId: 66042841,
+          actorType: "Bot",
+          publishPath,
+          repository,
+          getPermission,
+        })
+      ).resolves.toEqual({
+        authorized: false,
+        repository: `getsentry/${repository}`,
+      });
+      expect(getPermission).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each([
+    ["getsantry[bot]", 264270552, "Bot"],
+    ["getsantry[bot]", 66042841, "User"],
+    ["getsantry[bot]", undefined, "Bot"],
+    ["sentry-junior[bot]", 66042841, "Bot"],
+  ])(
+    "rejects mismatched bot identity %s (%s, %s)",
+    async (actor, actorId, actorType) => {
+      const getPermission = vi.fn();
+
+      await expect(
+        authorizeApproval({
+          actor,
+          actorId,
+          actorType,
+          repository: "sentry-protos",
+          getPermission,
+        })
+      ).resolves.toEqual({
+        authorized: false,
+        repository: "getsentry/sentry-protos",
+      });
+      expect(getPermission).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each(["sentry-junior[bot]", "getsantry[bot]"])(
+    "rejects %s approval for an invalid publish path",
+    async (actor) => {
+      const getPermission = vi.fn();
+
+      await expect(
+        authorizeApproval({
+          actor,
+          publishPath: "../escape",
+          repository: "junior",
+          getPermission,
+        })
+      ).resolves.toEqual({
+        authorized: false,
+        repository: "getsentry/junior",
+      });
+      expect(getPermission).not.toHaveBeenCalled();
+    }
+  );
 
   test("rejects an invalid target repository", async () => {
     const getPermission = vi.fn();

@@ -27,7 +27,13 @@ function getSetTargetsScript() {
   return section.groups.script.replace(/^ {10}/gm, "");
 }
 
-function runSetTargets({ path, repo, version, workspace = "" }) {
+function runSetTargets({
+  path,
+  repo,
+  version,
+  workspace = "",
+  targets = ["github"],
+}) {
   const directory = mkdtempSync(join(tmpdir(), "publish-workflow-test-"));
   temporaryDirectories.push(directory);
   const output = join(directory, "github-output");
@@ -38,7 +44,7 @@ function runSetTargets({ path, repo, version, workspace = "" }) {
       ...process.env,
       CRAFT_PUBLISH_PATH: path,
       CRAFT_PUBLISH_REPO: repo,
-      CRAFT_PUBLISH_TARGETS_JSON: '["github"]',
+      CRAFT_PUBLISH_TARGETS_JSON: JSON.stringify(targets),
       CRAFT_PUBLISH_VERSION: version,
       CRAFT_PUBLISH_WORKSPACE: workspace,
       GITHUB_OUTPUT: output,
@@ -114,6 +120,41 @@ test("publishes only on a fresh CI-ready label event", () => {
   expect(workflow).toContain(
     "!contains(github.event.issue.labels.*.name, 'ci-failed')"
   );
+});
+
+test("records completed targets before closing a successful publish issue", () => {
+  const workflow = getWorkflow();
+  const publish = workflow.indexOf("name: Publish using Craft");
+  const update = workflow.indexOf(
+    "name: Update completed targets and remove label"
+  );
+  const close = workflow.indexOf("name: Close on success");
+  const updateStep = workflow.slice(update, close);
+
+  expect(update).toBeGreaterThan(publish);
+  expect(close).toBeGreaterThan(update);
+  expect(updateStep).toContain("if: ${{ always() }}");
+  expect(updateStep).toContain(
+    "CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.state_file }}"
+  );
+  expect(updateStep).toContain(
+    "run: node .__publish__/src/publish/update-issue.js"
+  );
+  expect(workflow.slice(close)).toContain("if: ${{ success() }}");
+});
+
+test("creates a state file when no targets were already published", () => {
+  const { stateFile, state } = runSetTargets({
+    path: ".",
+    repo: "craft",
+    version: "2.34.1",
+    targets: [],
+  });
+
+  expect(stateFile).toMatch(
+    /\.craft-state\/craft\/publish-state-getsentry-craft-c232c383e26f-2\.34\.1\.json$/
+  );
+  expect(JSON.parse(state)).toEqual({ published: {} });
 });
 
 test("uses Craft's legacy root state filename", () => {

@@ -418,7 +418,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
       - name: Update completed targets and remove label
-        if: ${{ cancelled() || failure() }}
+        if: ${{ always() }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
           CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.state_file }}

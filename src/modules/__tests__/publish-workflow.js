@@ -54,10 +54,10 @@ function runSetTargets({
   });
 
   expect(result.status, result.stderr).toBe(0);
-  const stateFile = readFileSync(output, "utf8")
-    .trim()
-    .replace("state_file=", "");
-  return { stateFile, state: readFileSync(stateFile, "utf8") };
+  const outputs = readFileSync(output, "utf8");
+  const stateFile = outputs.match(/^state_file=(.+)$/m)?.[1];
+  const issueStateFile = outputs.match(/^issue_state_file=(.+)$/m)?.[1];
+  return { stateFile, issueStateFile, state: readFileSync(stateFile, "utf8") };
 }
 
 afterEach(() => {
@@ -129,13 +129,18 @@ test("records completed targets before closing a successful publish issue", () =
     "name: Update completed targets and remove label"
   );
   const close = workflow.indexOf("name: Close on success");
+  const publishStep = workflow.slice(publish, update);
   const updateStep = workflow.slice(update, close);
 
   expect(update).toBeGreaterThan(publish);
   expect(close).toBeGreaterThan(update);
+  expect(publishStep).toContain("id: craft-publish");
   expect(updateStep).toContain("if: ${{ always() }}");
   expect(updateStep).toContain(
-    "CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.state_file }}"
+    "continue-on-error: ${{ steps.craft-publish.outcome == 'success' }}"
+  );
+  expect(updateStep).toContain(
+    "CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.issue_state_file }}"
   );
   expect(updateStep).toContain(
     "run: node .__publish__/src/publish/update-issue.js"
@@ -155,6 +160,22 @@ test("creates a state file when no targets were already published", () => {
     /\.craft-state\/craft\/publish-state-getsentry-craft-c232c383e26f-2\.34\.1\.json$/
   );
   expect(JSON.parse(state)).toEqual({ published: {} });
+});
+
+test("keeps Craft's final state after a successful publish removes its state file", () => {
+  const { stateFile, issueStateFile } = runSetTargets({
+    path: ".",
+    repo: "craft",
+    version: "2.34.1",
+    targets: [],
+  });
+  const finalState = { published: { npm: true, gcs: true } };
+
+  writeFileSync(stateFile, JSON.stringify(finalState));
+  expect(JSON.parse(readFileSync(issueStateFile, "utf8"))).toEqual(finalState);
+
+  rmSync(stateFile);
+  expect(JSON.parse(readFileSync(issueStateFile, "utf8"))).toEqual(finalState);
 });
 
 test("uses Craft's legacy root state filename", () => {

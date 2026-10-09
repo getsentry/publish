@@ -354,11 +354,18 @@ jobs:
           state_file="$state_dir/publish-state-${owner_sanitised}-${repo_sanitised}-${cwd_hash}-${workspace_prefix}${version_component}.json"
           mkdir -p "$state_dir"
           printf %s "$payload" > "$state_file"
+          # Craft writes each completed target to this inode, then unlinks
+          # the state file on full success. Keep its final contents for the
+          # issue updater without changing the file Craft reads and writes.
+          issue_state_file="$state_file.issue"
+          ln -- "$state_file" "$issue_state_file"
           echo "state_file=$state_file" >> "$GITHUB_OUTPUT"
+          echo "issue_state_file=$issue_state_file" >> "$GITHUB_OUTPUT"
           echo "Wrote state file: $state_file"
 
       - uses: docker://getsentry/craft:latest
         name: Publish using Craft
+        id: craft-publish
         with:
           entrypoint: /bin/bash
           args: >-
@@ -419,9 +426,11 @@ jobs:
 
       - name: Update completed targets and remove label
         if: ${{ always() }}
+        # Bookkeeping errors must not turn a completed release into a failed publish.
+        continue-on-error: ${{ steps.craft-publish.outcome == 'success' }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
-          CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.state_file }}
+          CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.issue_state_file }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/update-issue.js
 

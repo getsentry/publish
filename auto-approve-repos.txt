@@ -35,7 +35,7 @@ getsentry/symbolic
 getsentry/taskbroker/clients
 getsentry/usage-accountant
 getsentry/watto
-getsentry/sentry
+getsentry/sentry/sentry
 getsentry/snuba
 getsentry/vroom
 getsentry/relay

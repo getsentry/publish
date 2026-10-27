@@ -8,7 +8,7 @@
   "author": "Sentry Open Source <oss@sentry.io>",
   "license": "Apache-2.0",
   "volta": {
-    "node": "24.0.0"
+    "node": "24.22.1"
   },
   "packageManager": "pnpm@12.8.1",
   "scripts": {

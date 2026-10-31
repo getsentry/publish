@@ -107,9 +107,9 @@ test("uses the CI-approved revision for checkout, location resolution, and publi
 test("grants OIDC tokens only to the publish job", () => {
   const workflow = getWorkflow();
   const publishJobStart = workflow.indexOf("  publish:");
-  const permissions = workflow.slice(publishJobStart).match(
-    /\n {4}permissions:\n(?<block>(?: {6}.+\n)+)/
-  )?.groups?.block;
+  const permissions = workflow
+    .slice(publishJobStart)
+    .match(/\n {4}permissions:\n(?<block>(?: {6}.+\n)+)/)?.groups?.block;
 
   expect(permissions).toBe(
     [

@@ -13,6 +13,9 @@ permissions:
   contents: read
   issues: write
   packages: write
+  # Lets Craft targets such as mcp-registry authenticate with GitHub OIDC
+  # instead of a long-lived secret.
+  id-token: write
 
 jobs:
   # When accepted is added to a publish issue:
@@ -203,14 +206,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     name: Publish a new version
-    # Job-level permissions replace the workflow-level ones, so restate them.
-    # id-token lets Craft targets such as mcp-registry authenticate with
-    # GitHub OIDC instead of a long-lived secret. Only this job needs it.
-    permissions:
-      contents: read
-      issues: write
-      packages: write
-      id-token: write
     # Publish when ci-ready is present (added by the poller after CI passes).
     # Fires ONLY on ci-ready label events — not accepted — to avoid racing
     # with waiting-for-ci on the same event. The poller always adds ci-ready

@@ -13,6 +13,9 @@ permissions:
   contents: read
   issues: write
   packages: write
+  # Lets Craft targets such as mcp-registry authenticate with GitHub OIDC
+  # instead of a long-lived secret.
+  id-token: write
 
 jobs:
   # When accepted is added to a publish issue:

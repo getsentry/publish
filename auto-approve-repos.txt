@@ -31,7 +31,6 @@ getsentry/snuba-sdk
 getsentry/statsdproxy
 getsentry/status-page-list
 getsentry/streams/sentry_streams
-getsentry/symbolic
 getsentry/taskbroker/clients
 getsentry/usage-accountant
 getsentry/watto

@@ -1,4 +1,5 @@
 const Sentry = require("@sentry/node");
+const { loadGitHubIncidents } = require("../libs/github-status");
 
 async function processEndState({ context, octokit, inputs, status }) {
   const { repo, version } = inputs;
@@ -38,7 +39,16 @@ async function processEndState({ context, octokit, inputs, status }) {
 }
 
 async function postIssueComment({ octokit, details }) {
-  const body = githubIssueComment(details);
+  let body = githubIssueComment(details);
+  // Failed and cancelled runs are often caused by a GitHub outage (stuck
+  // runners, API or git errors). List the incidents that overlap the run so
+  // readers can tell a GitHub problem from a release problem.
+  if (details.status === "failure" || details.status === "cancelled") {
+    const incidents = await loadGitHubIncidents(
+      new Date(details.workflowInfo.run_started_at)
+    );
+    body += githubIncidentsSection(incidents);
+  }
   await octokit.rest.issues.createComment({
     ...details.publishRepo,
     issue_number: details.issue_number,
@@ -65,6 +75,22 @@ function githubIssueComment({ status, workflowInfo, version, repo, run_id }) {
     default:
       throw new Error(`Unknown status: '${status}'`);
   }
+}
+
+function githubIncidentsSection(incidents) {
+  if (incidents.length === 0) {
+    return "";
+  }
+  const lines = incidents.map((incident) => {
+    const components = incident.components.join(", ") || "no components";
+    const resolved = incident.resolvedAt
+      ? `, resolved ${incident.resolvedAt}`
+      : "";
+    return `- [${incident.name}](${incident.url}) (${incident.status}; ${components}; started ${incident.startedAt}${resolved})`;
+  });
+  return `\n\n**GitHub incidents during this run** ([githubstatus.com](https://www.githubstatus.com)):\n${lines.join(
+    "\n"
+  )}`;
 }
 
 async function reportSession({ details, inputs }) {

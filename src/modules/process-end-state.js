@@ -1,7 +1,15 @@
+const fs = require("fs");
+const core = require("@actions/core");
 const Sentry = require("@sentry/node");
 const { loadGitHubIncidents } = require("../libs/github-status");
 
-async function processEndState({ context, octokit, inputs, status }) {
+async function processEndState({
+  context,
+  octokit,
+  inputs,
+  status,
+  publishedTargets = [],
+}) {
   const { repo, version } = inputs;
   const { repo: publishRepo, runId: run_id } = context;
   const { number: issue_number } = context.payload.issue;
@@ -20,6 +28,7 @@ async function processEndState({ context, octokit, inputs, status }) {
     issue_number,
     workflowInfo,
     status,
+    publishedTargets,
   };
 
   await postIssueComment({
@@ -56,24 +65,68 @@ async function postIssueComment({ octokit, details }) {
   });
 }
 
-function githubIssueComment({ status, workflowInfo, version, repo, run_id }) {
+function githubIssueComment({
+  status,
+  workflowInfo,
+  version,
+  repo,
+  run_id,
+  publishedTargets,
+}) {
+  const runLogs = `([run logs](${workflowInfo.html_url}?check_suite_focus=true#step:8))`;
   switch (status) {
     case "failure":
-      return `Failed to publish. ([run logs](${
-        workflowInfo.html_url
-      }?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
+      return `Failed to publish. ${runLogs}\n\n${retryAdvice({
+        repo,
         version,
-      )}) and start over._`;
+        publishedTargets,
+      })}`;
     case "cancelled":
-      return `Publish workflow cancelled. ([run logs](${
-        workflowInfo.html_url
-      }?check_suite_focus=true#step:8))\n\n_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
+      return `Publish workflow cancelled. ${runLogs}\n\n${retryAdvice({
+        repo,
         version,
-      )}) and start over._`;
+        publishedTargets,
+      })}`;
     case "success":
       return `Published successfully: [run#${run_id}](${workflowInfo.html_url})`;
     default:
       throw new Error(`Unknown status: '${status}'`);
+  }
+}
+
+/**
+ * Once a target is done, starting over would publish the same version again,
+ * so the advice is to retry: the retry skips the done targets.
+ */
+function retryAdvice({ repo, version, publishedTargets }) {
+  if (publishedTargets.length > 0) {
+    const targets = publishedTargets
+      .map((target) => `\`${target}\``)
+      .join(", ");
+    return `_Already done: ${targets}. Don't delete the release branch and start over. Fix the cause in the run logs, then add the \`accepted\` label again: the retry skips the done targets._`;
+  }
+  return `_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
+    version
+  )}) and start over._`;
+}
+
+/**
+ * Reads the targets that the Craft publish state file marks as published.
+ * Returns an empty list when there is no state file.
+ */
+function readPublishedTargets(stateFilePath) {
+  if (!stateFilePath || !fs.existsSync(stateFilePath)) {
+    return [];
+  }
+  try {
+    const { published = {} } = JSON.parse(
+      fs.readFileSync(stateFilePath, { encoding: "utf-8" })
+    );
+    return Object.keys(published).filter((target) => published[target]);
+  } catch (error) {
+    // Still post the comment, with the default advice.
+    core.warning(`Could not read the Craft publish state: ${error.message}`);
+    return [];
   }
 }
 
@@ -143,3 +196,4 @@ function sentryInfoFromDetails({ status, repo }) {
 }
 
 module.exports = processEndState;
+module.exports.readPublishedTargets = readPublishedTargets;

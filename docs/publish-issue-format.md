@@ -97,6 +97,8 @@ The workflow reads checked entries (`- [x] <target-id>`) in the `### Targets` se
 It preserves checked entries when Craft refreshes an existing request. During a failed
 release, the controller updates target checkboxes from the secure Craft publish-state
 file; targets marked checked are skipped on retry unless manually unchecked.
+When a failed or cancelled run leaves any target checked, the failure comment
+says to retry by adding `accepted` again instead of deleting the release branch.
 
 The requester, approval guidance, and optional changelog section are informational. The
 `Quick links` must follow `Requested by` and `Merge target`, and contain exactly one `View

@@ -148,6 +148,23 @@ test("records completed targets before closing a successful publish issue", () =
   expect(workflow.slice(close)).toContain("if: ${{ success() }}");
 });
 
+test("passes the publish state to the failure and cancellation comments", () => {
+  const workflow = getWorkflow();
+  for (const [name, status] of [
+    ["Inform about cancellation", "cancelled"],
+    ["Inform about failure", "failure"],
+  ]) {
+    const start = workflow.indexOf(`name: ${name}`);
+    const step = workflow.slice(start, workflow.indexOf("- name:", start + 1));
+    expect(step).toContain(
+      "CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.issue_state_file }}"
+    );
+    expect(step).toContain(
+      `run: node .__publish__/src/publish/post-result.js ${status}`
+    );
+  }
+});
+
 test("creates a state file when no targets were already published", () => {
   const { stateFile, state } = runSetTargets({
     path: ".",

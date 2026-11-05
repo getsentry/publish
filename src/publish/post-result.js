@@ -8,4 +8,8 @@ const inputs = JSON.parse(process.env.PUBLISH_ARGS);
 const args = process.argv.slice(2);
 const status = args[0];
 
-processEndState({context, octokit, inputs, status});
+const publishedTargets = processEndState.readPublishedTargets(
+  process.env.CRAFT_STATE_FILE_PATH
+);
+
+processEndState({context, octokit, inputs, status, publishedTargets});

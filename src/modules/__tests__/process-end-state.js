@@ -66,7 +66,7 @@ describe("publish failed", () => {
       {
         "body": "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
 
-      _Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
+      _Bad branch? Open a PR to the release branch to fix it, then add the \`accepted\` label again. Or [delete it with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
         "issue_number": "211",
         "owner": "getsentry",
         "repo": "publish",
@@ -119,7 +119,7 @@ describe("publish cancelleded", () => {
       {
         "body": "Publish workflow cancelled. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
 
-      _Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
+      _Bad branch? Open a PR to the release branch to fix it, then add the \`accepted\` label again. Or [delete it with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
         "issue_number": "211",
         "owner": "getsentry",
         "repo": "publish",
@@ -318,7 +318,7 @@ describe("GitHub incidents in the result comment", () => {
     expect(commentBody(args)).toMatchInlineSnapshot(`
       "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
 
-      _Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._
+      _Bad branch? Open a PR to the release branch to fix it, then add the \`accepted\` label again. Or [delete it with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._
 
       **GitHub incidents during this run** ([githubstatus.com](https://www.githubstatus.com)):
       - [Incident with Actions and Pages](https://stspg.io/open) (investigating; Actions, Pages; started 2026-11-05T14:30:00Z)
@@ -417,10 +417,10 @@ describe("retry advice after targets are done", () => {
 
     expect(args.octokit.rest.issues.createComment.mock.calls[0][0].body)
       .toMatchInlineSnapshot(`
-      "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
+        "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
 
-      _Already done: \`npm\`, \`github\`. Don't delete the release branch and start over. Fix the cause in the run logs, then add the \`accepted\` label again: the retry skips the done targets._"
-    `);
+        _Already done: \`npm\`, \`github\`. Keep the release branch and fix the cause in the run logs. If you need to fix something on the release branch, open a PR to it, but the remaining targets then publish from the new commit, so they can differ from the ones already published. Then add the \`accepted\` label again: the retry skips the checked-off targets._"
+      `);
   });
 
   test("gives the same advice on cancellation", async () => {

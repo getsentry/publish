@@ -96,16 +96,16 @@ function githubIssueComment({
 
 /**
  * Once a target is done, starting over would publish the same version again,
- * so the advice is to retry: the retry skips the done targets.
+ * so the advice is to retry: the retry skips the checked-off targets.
  */
 function retryAdvice({ repo, version, publishedTargets }) {
   if (publishedTargets.length > 0) {
     const targets = publishedTargets
       .map((target) => `\`${target}\``)
       .join(", ");
-    return `_Already done: ${targets}. Don't delete the release branch and start over. Fix the cause in the run logs, then add the \`accepted\` label again: the retry skips the done targets._`;
+    return `_Already done: ${targets}. Keep the release branch and fix the cause in the run logs. If you need to fix something on the release branch, open a PR to it, but the remaining targets then publish from the new commit, so they can differ from the ones already published. Then add the \`accepted\` label again: the retry skips the checked-off targets._`;
   }
-  return `_Bad branch? You can [delete with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
+  return `_Bad branch? Open a PR to the release branch to fix it, then add the \`accepted\` label again. Or [delete it with ease](https://github.com/getsentry/${repo}/branches/all?query=${encodeURIComponent(
     version
   )}) and start over._`;
 }

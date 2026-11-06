@@ -66,7 +66,7 @@ describe("publish failed", () => {
       {
         "body": "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
 
-      _Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
+      _Bad branch? Open a PR to the release branch to fix it, then add the \`accepted\` label again. Or [delete it with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
         "issue_number": "211",
         "owner": "getsentry",
         "repo": "publish",
@@ -119,7 +119,7 @@ describe("publish cancelleded", () => {
       {
         "body": "Publish workflow cancelled. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
 
-      _Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
+      _Bad branch? Open a PR to the release branch to fix it, then add the \`accepted\` label again. Or [delete it with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._",
         "issue_number": "211",
         "owner": "getsentry",
         "repo": "publish",
@@ -318,7 +318,7 @@ describe("GitHub incidents in the result comment", () => {
     expect(commentBody(args)).toMatchInlineSnapshot(`
       "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
 
-      _Bad branch? You can [delete with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._
+      _Bad branch? Open a PR to the release branch to fix it, then add the \`accepted\` label again. Or [delete it with ease](https://github.com/getsentry/sentry/branches/all?query=21.3.1) and start over._
 
       **GitHub incidents during this run** ([githubstatus.com](https://www.githubstatus.com)):
       - [Incident with Actions and Pages](https://stspg.io/open) (investigating; Actions, Pages; started 2026-11-05T14:30:00Z)
@@ -377,5 +377,92 @@ describe("GitHub incidents in the result comment", () => {
 
     expect(fetch).not.toHaveBeenCalled();
     expect(commentBody(args)).not.toContain("GitHub incidents");
+  });
+});
+
+describe("retry advice after targets are done", () => {
+  function argsFor(status, publishedTargets) {
+    return {
+      status,
+      publishedTargets,
+      inputs: { repo: "sentry", version: "21.3.1" },
+      context: {
+        runId: "1234",
+        repo: { owner: "getsentry", repo: "publish" },
+        payload: { issue: { number: "211" } },
+      },
+      octokit: {
+        rest: {
+          actions: {
+            getWorkflowRun: async () => ({
+              data: {
+                html_url:
+                  "https://github.com/getsentry/sentry/actions/runs/1234",
+              },
+            }),
+          },
+          issues: {
+            createComment: vi.fn(),
+            update: vi.fn(),
+          },
+        },
+      },
+    };
+  }
+
+  test("tells the user to retry instead of deleting the branch", async () => {
+    const args = argsFor("failure", ["npm", "github"]);
+
+    await processEndState(args);
+
+    expect(args.octokit.rest.issues.createComment.mock.calls[0][0].body)
+      .toMatchInlineSnapshot(`
+        "Failed to publish. ([run logs](https://github.com/getsentry/sentry/actions/runs/1234?check_suite_focus=true#step:8))
+
+        _Already done: \`npm\`, \`github\`. Keep the release branch and fix the cause in the run logs. If you need to fix something on the release branch, open a PR to it, but the remaining targets then publish from the new commit, so they can differ from the ones already published. Then add the \`accepted\` label again: the retry skips the checked-off targets._"
+      `);
+  });
+
+  test("gives the same advice on cancellation", async () => {
+    const args = argsFor("cancelled", ["npm"]);
+
+    await processEndState(args);
+
+    const { body } = args.octokit.rest.issues.createComment.mock.calls[0][0];
+    expect(body).toContain("_Already done: `npm`.");
+    expect(body).not.toContain("delete with ease");
+  });
+});
+
+describe("readPublishedTargets", () => {
+  const realFs = require("fs");
+
+  test("returns the published targets", () => {
+    vi.spyOn(realFs, "existsSync").mockReturnValue(true);
+    vi.spyOn(realFs, "readFileSync").mockReturnValue(
+      JSON.stringify({ published: { npm: true, pypi: false, github: true } })
+    );
+
+    expect(processEndState.readPublishedTargets("state.json")).toEqual([
+      "npm",
+      "github",
+    ]);
+  });
+
+  test("returns nothing without a state file", () => {
+    vi.spyOn(realFs, "existsSync").mockReturnValue(false);
+
+    expect(processEndState.readPublishedTargets("state.json")).toEqual([]);
+    expect(processEndState.readPublishedTargets("")).toEqual([]);
+  });
+
+  test("warns and returns nothing for an unreadable state file", () => {
+    vi.spyOn(realFs, "existsSync").mockReturnValue(true);
+    vi.spyOn(realFs, "readFileSync").mockReturnValue("{");
+
+    expect(processEndState.readPublishedTargets("state.json")).toEqual([]);
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining("Could not read the Craft publish state")
+    );
   });
 });

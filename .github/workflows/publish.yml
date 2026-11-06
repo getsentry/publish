@@ -441,6 +441,7 @@ jobs:
         if: ${{ cancelled() }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
+          CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.issue_state_file }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/post-result.js cancelled
 
@@ -448,6 +449,7 @@ jobs:
         if: ${{ failure() }}
         env:
           PUBLISH_ARGS: ${{ steps.inputs.outputs.result }}
+          CRAFT_STATE_FILE_PATH: ${{ steps.craft-state.outputs.issue_state_file }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .__publish__/src/publish/post-result.js failure
 

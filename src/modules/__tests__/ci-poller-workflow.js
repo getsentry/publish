@@ -15,11 +15,13 @@ import { afterEach, expect, test } from "vitest";
 const temporaryDirectories = [];
 const INITIAL_REVISION = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const UPDATED_REVISION = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const SUCCESSFUL_ACTIONS_SUITE = {
-  app: { name: "GitHub Actions", slug: "github-actions" },
+const SUCCESSFUL_WORKFLOW_RUN = {
   conclusion: "success",
-  latest_check_runs_count: 1,
+  html_url: "https://github.com/getsentry/toolkit/actions/runs/1",
+  name: "CI",
+  run_number: 1,
   status: "completed",
+  workflow_id: 1,
 };
 
 function getPollerScript() {
@@ -50,8 +52,9 @@ function runPoller({
   liveIssueBody = issueBody,
   initialLabels = ["accepted", "ci-pending"],
   liveLabels = initialLabels,
-  checkSuites = [SUCCESSFUL_ACTIONS_SUITE],
-  checkSuitesExit = 0,
+  checkRuns = '{"status":"completed","conclusion":"success"}',
+  workflowRuns = [SUCCESSFUL_WORKFLOW_RUN],
+  workflowRunsExit = 0,
 } = {}) {
   const directory = mkdtempSync(join(tmpdir(), "ci-poller-workflow-test-"));
   temporaryDirectories.push(directory);
@@ -104,9 +107,9 @@ case "$*" in
   "issue view "*)
     printf '%s' "$GH_LIVE_ISSUE"
     ;;
-  "api --paginate "*"/check-suites"*)
-    [[ "$GH_CHECK_SUITES_EXIT" == "0" ]] || exit "$GH_CHECK_SUITES_EXIT"
-    printf '%s' "$GH_CHECK_SUITES"
+  *"/actions/runs?head_sha="*)
+    [[ "$GH_WORKFLOW_RUNS_EXIT" == "0" ]] || exit "$GH_WORKFLOW_RUNS_EXIT"
+    printf '%s' "$GH_WORKFLOW_RUNS"
     ;;
   *"/check-suites"*)
     printf '%s' "release/1.2.3"
@@ -118,7 +121,7 @@ case "$*" in
     printf '%s' '{"state":"success","total_count":0}'
     ;;
   *"/check-runs"*)
-    printf '%s' '{"status":"completed","conclusion":"success"}'
+    printf '%s' "$GH_CHECK_RUNS"
     ;;
   "issue edit "*)
     for ((index = 1; index <= $#; index++)); do
@@ -160,10 +163,11 @@ esac
         ...process.env,
         AUTHORIZATION_EXIT: String(authorizationExit),
         CAPTURED_BODY: capturedBody,
-        GH_CHECK_SUITES: checkSuites
-          .map((suite) => JSON.stringify(suite))
+        GH_WORKFLOW_RUNS: workflowRuns
+          .map((run) => JSON.stringify(run))
           .join("\n"),
-        GH_CHECK_SUITES_EXIT: String(checkSuitesExit),
+        GH_WORKFLOW_RUNS_EXIT: String(workflowRunsExit),
+        GH_CHECK_RUNS: checkRuns,
         GH_LOG: logFile,
         GH_ISSUES: issue,
         GH_LIVE_ISSUE: liveIssue,
@@ -289,61 +293,71 @@ test("revokes approval when dry-run changes before ci-ready", () => {
   expect(poller.log).not.toContain("--add-label ci-ready");
 });
 
-function runPollerWithSuites(checkSuites, checkSuitesExit = 0) {
+function runPollerWithRuns({ checkRuns, workflowRuns, workflowRunsExit = 0 }) {
   const body = "canonical issue body\n";
   return runPoller({
-    checkSuites,
-    checkSuitesExit,
+    checkRuns,
     issueBody: body,
     updateOutput: JSON.stringify({ issueBody: body }),
+    workflowRuns,
+    workflowRunsExit,
   });
 }
 
-test("marks CI failed when a check suite failed but every check run passed", () => {
-  const poller = runPollerWithSuites([
-    { ...SUCCESSFUL_ACTIONS_SUITE, conclusion: "failure" },
-  ]);
+test("marks CI failed when a workflow run failed but every check run passed", () => {
+  const poller = runPollerWithRuns({
+    workflowRuns: [{ ...SUCCESSFUL_WORKFLOW_RUN, conclusion: "failure" }],
+  });
 
   expect(poller.result.status, poller.result.stderr).toBe(0);
   expect(poller.log).toContain(
     "--remove-label ci-pending --remove-label accepted --add-label ci-failed"
   );
-  expect(poller.log).toContain("Failed check suites: GitHub Actions (failure)");
+  expect(poller.log).toContain(
+    "- [CI](https://github.com/getsentry/toolkit/actions/runs/1) (failure)"
+  );
   expect(poller.log).not.toContain("--add-label ci-ready");
 });
 
-test("waits while a GitHub Actions check suite is still queued", () => {
-  const poller = runPollerWithSuites([
-    {
-      ...SUCCESSFUL_ACTIONS_SUITE,
-      conclusion: null,
-      latest_check_runs_count: 0,
-      status: "queued",
-    },
-  ]);
+test("marks CI failed when a workflow run failed before creating any jobs", () => {
+  const poller = runPollerWithRuns({
+    checkRuns: "",
+    workflowRuns: [
+      { ...SUCCESSFUL_WORKFLOW_RUN, conclusion: "startup_failure" },
+    ],
+  });
+
+  expect(poller.result.status, poller.result.stderr).toBe(0);
+  expect(poller.log).toContain("--add-label ci-failed");
+  expect(poller.log).not.toContain("--add-label ci-ready");
+});
+
+test("waits while a workflow run is still queued", () => {
+  const poller = runPollerWithRuns({
+    workflowRuns: [
+      { ...SUCCESSFUL_WORKFLOW_RUN, conclusion: null, status: "queued" },
+    ],
+  });
 
   expect(poller.result.status, poller.result.stderr).toBe(0);
   expect(poller.log).not.toContain("--add-label");
   expect(poller.log).not.toContain("issue comment");
 });
 
-test("ignores empty third-party check suites that stay queued", () => {
-  const poller = runPollerWithSuites([
-    SUCCESSFUL_ACTIONS_SUITE,
-    {
-      app: { name: "Codecov", slug: "codecov" },
-      conclusion: null,
-      latest_check_runs_count: 0,
-      status: "queued",
-    },
-  ]);
+test("ignores a failed workflow run that a newer run of the same workflow replaced", () => {
+  const poller = runPollerWithRuns({
+    workflowRuns: [
+      { ...SUCCESSFUL_WORKFLOW_RUN, conclusion: "cancelled", run_number: 1 },
+      { ...SUCCESSFUL_WORKFLOW_RUN, run_number: 2 },
+    ],
+  });
 
   expect(poller.result.status, poller.result.stderr).toBe(0);
   expect(poller.log).toContain("--add-label ci-ready");
 });
 
-test("skips an issue without changing labels when check suites cannot be fetched", () => {
-  const poller = runPollerWithSuites([], 1);
+test("skips an issue without changing labels when workflow runs cannot be fetched", () => {
+  const poller = runPollerWithRuns({ workflowRuns: [], workflowRunsExit: 1 });
 
   expect(poller.result.status, poller.result.stderr).toBe(0);
   expect(poller.log).not.toContain("--add-label");

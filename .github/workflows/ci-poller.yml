@@ -37,7 +37,7 @@ jobs:
           private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
       # sentry-release-bot token for cross-repo API access (check-suites,
-      # status, check-runs). The sentry-internal-app is only installed on
+      # status, check-runs, workflow runs). The sentry-internal-app is only installed on
       # some repos, so it 404s on private repos like sentry-xbox,
       # sentry-playstation, sentry-switch, service-registry, etc.
       - name: Get release bot auth token
@@ -188,11 +188,12 @@ jobs:
               exit 0
             fi
 
-            # Fetch all check suites too. A workflow run can conclude "failure"
-            # without creating some of its jobs (e.g. during a GitHub Actions
-            # incident), so its check runs alone can look all green.
-            if ! all_suites=$(gh_api_release --paginate "repos/${repo}/commits/${sha}/check-suites" --jq '.check_suites[]'); then
-              echo "  Could not fetch check suites for ${repo}@${sha:0:8}, skipping."
+            # Fetch GitHub Actions workflow runs too. A run can conclude
+            # "failure" without creating some of its jobs (e.g. during a GitHub
+            # Actions incident) or any jobs at all (startup_failure), so its
+            # check runs alone can look all green.
+            if ! all_runs=$(gh_api_release --paginate "repos/${repo}/actions/runs?head_sha=${sha}&per_page=100" --jq '.workflow_runs[]'); then
+              echo "  Could not fetch workflow runs for ${repo}@${sha:0:8}, skipping."
               exit 0
             fi
 
@@ -203,19 +204,20 @@ jobs:
             # "success", "neutral", and "skipped" are considered passing.
             unsuccessful_checks=$(echo "$all_checks" | jq -s '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
 
-            # Many apps (codecov, vercel, ...) create an empty suite on every
-            # push and leave it queued forever. Only count suites that have
-            # check runs or belong to GitHub Actions.
-            relevant_suites=$(echo "$all_suites" | jq -s '[.[] | select(.latest_check_runs_count > 0 or .app.slug == "github-actions")]')
-            pending_suites=$(echo "$relevant_suites" | jq '[.[] | select(.status != "completed")] | length')
-            unsuccessful_suites=$(echo "$relevant_suites" | jq '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
+            # Only the latest run of each workflow counts, so a cancelled or
+            # failed run that a newer run of the same workflow replaced does not
+            # block (re-runs keep the run ID, so they are already the latest).
+            latest_runs=$(echo "$all_runs" | jq -s 'group_by(.workflow_id) | map(max_by(.run_number))')
+            total_runs=$(echo "$latest_runs" | jq 'length')
+            pending_runs=$(echo "$latest_runs" | jq '[.[] | select(.status != "completed")] | length')
+            unsuccessful_runs=$(echo "$latest_runs" | jq '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
 
-            echo "  commit_status=${commit_status} (${total_statuses} statuses) pending=${pending_checks} unsuccessful=${unsuccessful_checks} total=${total_checks} pending_suites=${pending_suites} unsuccessful_suites=${unsuccessful_suites}"
+            echo "  commit_status=${commit_status} (${total_statuses} statuses) pending=${pending_checks} unsuccessful=${unsuccessful_checks} total=${total_checks} pending_runs=${pending_runs} unsuccessful_runs=${unsuccessful_runs} total_runs=${total_runs}"
 
-            # Require at least one check run or one commit status to exist —
-            # otherwise CI hasn't started yet and all counts would be 0.
-            if [[ "$total_checks" == "0" && "$total_statuses" == "0" ]]; then
-              echo "  No check runs or commit statuses found — CI may not have started yet."
+            # Require at least one check run, commit status, or workflow run to
+            # exist — otherwise CI hasn't started yet and all counts would be 0.
+            if [[ "$total_checks" == "0" && "$total_statuses" == "0" && "$total_runs" == "0" ]]; then
+              echo "  No check runs, commit statuses, or workflow runs found — CI may not have started yet."
               exit 0
             fi
 
@@ -224,7 +226,7 @@ jobs:
             #     repos use only check runs, not commit statuses)
             #   - all check runs are completed (none pending)
             #   - no check runs have unsuccessful conclusions
-            #   - no relevant check suites are pending or unsuccessful
+            #   - the latest run of each workflow completed successfully
             status_ok=false
             if [[ "$commit_status" == "success" ]]; then
               status_ok=true
@@ -235,7 +237,7 @@ jobs:
 
             if [[ "$status_ok" == "true" \
                   && "$pending_checks" == "0" && "$unsuccessful_checks" == "0" \
-                  && "$pending_suites" == "0" && "$unsuccessful_suites" == "0" ]]; then
+                  && "$pending_runs" == "0" && "$unsuccessful_runs" == "0" ]]; then
 
               # Verify live approval: the current accepted-label actor must
               # still have target access.
@@ -324,17 +326,17 @@ jobs:
               comment_body="CI **commit status** checks failed for ${repo}@${version} (\`${sha:0:8}\`). Publishing is blocked."$'\n\n'"Failed status checks:"$'\n'"${failed_contexts}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-add the **accepted** label once CI is fixed to retry."
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
 
-            elif [[ "$pending_checks" == "0" && "$unsuccessful_checks" == "0" && "$unsuccessful_suites" != "0" ]]; then
-              # All check runs passed but a check suite (e.g. a workflow run
-              # that never created some of its jobs) concluded unsuccessfully.
-              echo "  CI failed (check suite)! Swapping ci-pending → ci-failed and removing accepted."
+            elif [[ "$pending_checks" == "0" && "$unsuccessful_checks" == "0" && "$unsuccessful_runs" != "0" ]]; then
+              # All check runs passed but a workflow run (e.g. one that never
+              # created some of its jobs) concluded unsuccessfully.
+              echo "  CI failed (workflow run)! Swapping ci-pending → ci-failed and removing accepted."
               gh issue edit "$number" -R "$GITHUB_REPOSITORY" \
                 --remove-label "ci-pending" \
                 --remove-label "accepted" \
                 --add-label "ci-failed"
 
-              failed_suites=$(echo "$relevant_suites" | jq -r '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | .app.name + " (" + .conclusion + ")"] | join(", ")')
-              comment_body="CI **check suites** failed for ${repo}@${version} (\`${sha:0:8}\`) even though every check run passed. A workflow run may have ended before creating all of its jobs. Publishing is blocked."$'\n\n'"Failed check suites: ${failed_suites}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-run the failed workflow, then re-add the **accepted** label to retry."
+              failed_runs=$(echo "$latest_runs" | jq -r '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | "- [" + .name + "](" + .html_url + ") (" + .conclusion + ")"] | join("\n")')
+              comment_body="CI **workflow runs** failed for ${repo}@${version} (\`${sha:0:8}\`) even though every check run passed. A workflow run may have ended before creating all of its jobs. Publishing is blocked."$'\n\n'"Failed workflow runs:"$'\n'"${failed_runs}"$'\n\n'"[View check runs](https://github.com/${repo}/commit/${sha}/checks/)"$'\n\n'"Re-run the failed workflow, then re-add the **accepted** label to retry."
               gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body "$comment_body"
             fi
             )

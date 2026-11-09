@@ -15,6 +15,12 @@ import { afterEach, expect, test } from "vitest";
 const temporaryDirectories = [];
 const INITIAL_REVISION = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const UPDATED_REVISION = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const SUCCESSFUL_ACTIONS_SUITE = {
+  app: { name: "GitHub Actions", slug: "github-actions" },
+  conclusion: "success",
+  latest_check_runs_count: 1,
+  status: "completed",
+};
 
 function getPollerScript() {
   const workflow = readFileSync(
@@ -44,6 +50,8 @@ function runPoller({
   liveIssueBody = issueBody,
   initialLabels = ["accepted", "ci-pending"],
   liveLabels = initialLabels,
+  checkSuites = [SUCCESSFUL_ACTIONS_SUITE],
+  checkSuitesExit = 0,
 } = {}) {
   const directory = mkdtempSync(join(tmpdir(), "ci-poller-workflow-test-"));
   temporaryDirectories.push(directory);
@@ -95,6 +103,10 @@ case "$*" in
     ;;
   "issue view "*)
     printf '%s' "$GH_LIVE_ISSUE"
+    ;;
+  "api --paginate "*"/check-suites"*)
+    [[ "$GH_CHECK_SUITES_EXIT" == "0" ]] || exit "$GH_CHECK_SUITES_EXIT"
+    printf '%s' "$GH_CHECK_SUITES"
     ;;
   *"/check-suites"*)
     printf '%s' "release/1.2.3"
@@ -148,6 +160,10 @@ esac
         ...process.env,
         AUTHORIZATION_EXIT: String(authorizationExit),
         CAPTURED_BODY: capturedBody,
+        GH_CHECK_SUITES: checkSuites
+          .map((suite) => JSON.stringify(suite))
+          .join("\n"),
+        GH_CHECK_SUITES_EXIT: String(checkSuitesExit),
         GH_LOG: logFile,
         GH_ISSUES: issue,
         GH_LIVE_ISSUE: liveIssue,
@@ -271,4 +287,65 @@ test("revokes approval when dry-run changes before ci-ready", () => {
     "--remove-label accepted --remove-label ci-pending"
   );
   expect(poller.log).not.toContain("--add-label ci-ready");
+});
+
+function runPollerWithSuites(checkSuites, checkSuitesExit = 0) {
+  const body = "canonical issue body\n";
+  return runPoller({
+    checkSuites,
+    checkSuitesExit,
+    issueBody: body,
+    updateOutput: JSON.stringify({ issueBody: body }),
+  });
+}
+
+test("marks CI failed when a check suite failed but every check run passed", () => {
+  const poller = runPollerWithSuites([
+    { ...SUCCESSFUL_ACTIONS_SUITE, conclusion: "failure" },
+  ]);
+
+  expect(poller.result.status, poller.result.stderr).toBe(0);
+  expect(poller.log).toContain(
+    "--remove-label ci-pending --remove-label accepted --add-label ci-failed"
+  );
+  expect(poller.log).toContain("Failed check suites: GitHub Actions (failure)");
+  expect(poller.log).not.toContain("--add-label ci-ready");
+});
+
+test("waits while a GitHub Actions check suite is still queued", () => {
+  const poller = runPollerWithSuites([
+    {
+      ...SUCCESSFUL_ACTIONS_SUITE,
+      conclusion: null,
+      latest_check_runs_count: 0,
+      status: "queued",
+    },
+  ]);
+
+  expect(poller.result.status, poller.result.stderr).toBe(0);
+  expect(poller.log).not.toContain("--add-label");
+  expect(poller.log).not.toContain("issue comment");
+});
+
+test("ignores empty third-party check suites that stay queued", () => {
+  const poller = runPollerWithSuites([
+    SUCCESSFUL_ACTIONS_SUITE,
+    {
+      app: { name: "Codecov", slug: "codecov" },
+      conclusion: null,
+      latest_check_runs_count: 0,
+      status: "queued",
+    },
+  ]);
+
+  expect(poller.result.status, poller.result.stderr).toBe(0);
+  expect(poller.log).toContain("--add-label ci-ready");
+});
+
+test("skips an issue without changing labels when check suites cannot be fetched", () => {
+  const poller = runPollerWithSuites([], 1);
+
+  expect(poller.result.status, poller.result.stderr).toBe(0);
+  expect(poller.log).not.toContain("--add-label");
+  expect(poller.log).not.toContain("issue comment");
 });

@@ -204,10 +204,12 @@ jobs:
             # "success", "neutral", and "skipped" are considered passing.
             unsuccessful_checks=$(echo "$all_checks" | jq -s '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
 
-            # Only the latest run of each workflow counts, so a cancelled or
-            # failed run that a newer run of the same workflow replaced does not
-            # block (re-runs keep the run ID, so they are already the latest).
-            latest_runs=$(echo "$all_runs" | jq -s 'group_by(.workflow_id) | map(max_by(.run_number))')
+            # Only the latest run of each workflow and event counts, so a
+            # cancelled or failed run that a newer run replaced does not block
+            # (re-runs keep the run ID, so they are already the latest). Events
+            # stay separate so a passing pull_request run can't hide a failed
+            # push run, which may be the only one that builds artifacts.
+            latest_runs=$(echo "$all_runs" | jq -s 'group_by([.workflow_id, .event]) | map(max_by(.run_number))')
             total_runs=$(echo "$latest_runs" | jq 'length')
             pending_runs=$(echo "$latest_runs" | jq '[.[] | select(.status != "completed")] | length')
             unsuccessful_runs=$(echo "$latest_runs" | jq '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')

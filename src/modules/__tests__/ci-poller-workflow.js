@@ -18,6 +18,7 @@ const UPDATED_REVISION = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const SUCCESSFUL_WORKFLOW_RUN = {
   conclusion: "success",
   html_url: "https://github.com/getsentry/toolkit/actions/runs/1",
+  event: "push",
   name: "CI",
   run_number: 1,
   status: "completed",
@@ -354,6 +355,19 @@ test("ignores a failed workflow run that a newer run of the same workflow replac
 
   expect(poller.result.status, poller.result.stderr).toBe(0);
   expect(poller.log).toContain("--add-label ci-ready");
+});
+
+test("keeps a failed push run even when a newer pull_request run of the same workflow passed", () => {
+  const poller = runPollerWithRuns({
+    workflowRuns: [
+      { ...SUCCESSFUL_WORKFLOW_RUN, conclusion: "failure", run_number: 1 },
+      { ...SUCCESSFUL_WORKFLOW_RUN, event: "pull_request", run_number: 2 },
+    ],
+  });
+
+  expect(poller.result.status, poller.result.stderr).toBe(0);
+  expect(poller.log).toContain("--add-label ci-failed");
+  expect(poller.log).not.toContain("--add-label ci-ready");
 });
 
 test("skips an issue without changing labels when workflow runs cannot be fetched", () => {

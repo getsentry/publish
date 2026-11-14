@@ -16,7 +16,6 @@ getsentry/rust-proguard
 getsentry/rust-sourcemap
 getsentry/rust-usage-accountant
 getsentry/script-runner
-getsentry/sentry-api-schema
 getsentry/sentry-forked-djangorestframework-stubs
 getsentry/sentry-forked-django-stubs
 getsentry/sentry-forked-jsonnet
@@ -25,6 +24,7 @@ getsentry/sentry-kafka-management
 getsentry/sentry-kafka-schemas
 getsentry/sentry-protos
 getsentry/sentry-redis-tools
+getsentry/sentry/static/packages/api
 getsentry/service-registry
 getsentry/skrooge
 getsentry/snuba-sdk
